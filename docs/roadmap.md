@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Save page visits locally and show recent visits. Add a basic pause control when
-recording begins. Background visits should not automatically earn engaged time.
-Sanitize URLs before saving them, and keep private browsing excluded.
+Visit history and pause are implemented. Next: track time on the focused tab.
+Keep background visits separate from engaged time. Idle detection and restart
+recovery follow in their own commits; do not label early timing as attention.
 
 ## Decisions for later phases
 

@@ -34,3 +34,37 @@ async function showCurrentPage() {
 
 refresh.addEventListener('click', showCurrentPage);
 showCurrentPage();
+
+const pause = document.getElementById('pause');
+const recordingStatus = document.getElementById('recording-status');
+const visits = document.getElementById('visits');
+let paused = false;
+
+async function loadHistory(message = { type: 'history' }) {
+  pause.disabled = true;
+  try {
+    const result = await chrome.runtime.sendMessage(message);
+    if (!result || result.error) throw new Error(result?.error || 'History is unavailable.');
+    paused = result.paused;
+    pause.textContent = paused ? 'Resume recording' : 'Pause recording';
+    recordingStatus.textContent = result.saveError || (paused ? 'Recording paused.' : 'Recording new page loads.');
+    visits.replaceChildren();
+    for (const visit of result.visits) {
+      const item = document.createElement('li');
+      const name = document.createElement('strong');
+      const detail = document.createElement('span');
+      name.textContent = visit.title;
+      detail.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()}`;
+      item.append(name, detail);
+      visits.append(item);
+    }
+    if (!result.visits.length) visits.textContent = 'No visits yet. Open or reload a website.';
+    pause.disabled = false;
+  } catch (error) {
+    recordingStatus.textContent = `${error.message} Use Refresh page details to retry.`;
+  }
+}
+
+pause.addEventListener('click', () => loadHistory({ type: 'pause', paused: !paused }));
+refresh.addEventListener('click', () => loadHistory());
+loadHistory();
