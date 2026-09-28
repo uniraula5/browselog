@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BrowseLog</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <header>
+    <span class="logo" aria-hidden="true">b.</span>
+    <div>
+      <h1>BrowseLog</h1>
+      <p class="subtitle">Make your browsing time visible.</p>
+    </div>
+  </header>
+  <main>
+    <section class="page-card" aria-labelledby="page-heading">
+      <h2 id="page-heading">Current page</h2>
+      <div id="page-details" role="status" aria-live="polite">
+        <p id="page-site">Loading…</p>
+        <p id="page-title">Reading the selected tab.</p>
+      </div>
+      <button id="refresh" type="button">Refresh page details</button>
+    </section>
+    <section class="progress" aria-labelledby="progress-heading">
+      <h2 id="progress-heading">A small start</h2>
+      <p>The popup is ready. Visit history and time tracking come next.</p>
+      <p class="notice">Tracking is not enabled. Nothing is saved.</p>
+    </section>
+  </main>
+  <footer>Milestone 1 <span aria-hidden="true">·</span> v0.1.0</footer>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "BrowseLog",
+  "version": "0.1.0",
+  "description": "A personal browsing activity tracker. First milestone: a current-tab popup.",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_title": "Open BrowseLog",
+    "default_popup": "popup.html"
+  }
+}
