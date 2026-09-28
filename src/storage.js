@@ -26,9 +26,30 @@ function openDatabase() {
 export async function saveVisit(visit) {
   const db = await openDatabase();
   try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction('visits', 'readwrite');
+      const request = transaction.objectStore('visits').add(visit);
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
+export async function addFocusedTime(id, milliseconds) {
+  if (milliseconds <= 0) return;
+  const db = await openDatabase();
+  try {
     await new Promise((resolve, reject) => {
       const transaction = db.transaction('visits', 'readwrite');
-      transaction.objectStore('visits').add(visit);
+      const visits = transaction.objectStore('visits');
+      const request = visits.get(id);
+      request.onsuccess = () => {
+        if (!request.result) return;
+        const visit = request.result;
+        visit.focusedMs = (visit.focusedMs || 0) + milliseconds;
+        visits.put(visit);
+      };
       transaction.oncomplete = resolve;
       transaction.onabort = () => reject(transaction.error);
       transaction.onerror = () => reject(transaction.error);

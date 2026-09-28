@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BrowseLog",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "minimum_chrome_version": "102",
   "description": "A personal browsing activity tracker with local visit history.",
   "permissions": ["tabs", "storage"],
   "incognito": "not_allowed",

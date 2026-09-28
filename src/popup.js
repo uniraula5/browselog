@@ -53,9 +53,12 @@ async function loadHistory(message = { type: 'history' }) {
       const item = document.createElement('li');
       const name = document.createElement('strong');
       const detail = document.createElement('span');
+      const focused = document.createElement('span');
       name.textContent = visit.title;
       detail.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()}`;
-      item.append(name, detail);
+      const seconds = Math.floor((visit.focusedMs || 0) / 1000);
+      focused.textContent = `Focused: ${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+      item.append(name, detail, focused);
       visits.append(item);
     }
     if (!result.visits.length) visits.textContent = 'No visits yet. Open or reload a website.';

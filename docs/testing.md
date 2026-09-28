@@ -21,9 +21,15 @@ npm test
 - Open a page in a background tab: save a visit without assigning time.
 - Confirm private tabs and browser pages are excluded.
 - Check a saved URL in IndexedDB: no credentials, query, or fragment.
+- Switch between two pages: only the selected page should gain focused time.
+- Change windows, minimize Chrome, or switch apps: previous timing should stop.
+- Pause for several seconds and resume: the paused gap should not count.
+- Refresh the popup twice: the first interval should not be added twice.
+- Reload a website: the new visit should start with its own timer.
 
-Add automated timing tests when the tracker is introduced. Visit counts alone
-do not measure engagement. Same-page app navigation is not recorded yet.
+Focused time still includes idle time and does not measure engagement.
+Same-page app navigation is not recorded yet. An unfinished interval may be lost
+on browser shutdown; do not claim restart or sleep recovery is complete.
 
 ## Milestone 2 results
 
@@ -31,3 +37,11 @@ The four automated filtering tests pass. An isolated Chrome for Testing profile
 also passed recording, sanitized URLs, popup pause/resume, browser restart
 persistence, repeated page loads, newest-first ordering, and the ten-row limit.
 The browser checks used temporary local pages, not personal browsing history.
+
+## Milestone 3 results
+
+All ten unit tests pass. Isolated Chromium checks passed tab switching,
+background tabs, window switching, minimizing, pause/resume, reloads, tab closure,
+and focused-time rendering. The visit-history and persistence checks still pass.
+Switching to a different desktop app remains a manual check; the unit tests cover
+the unfocused-window state. Idle, sleep, and unfinished-interval recovery are pending.

@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Visit history and pause are implemented. Next: track time on the focused tab.
-Keep background visits separate from engaged time. Idle detection and restart
-recovery follow in their own commits; do not label early timing as attention.
+Focused-tab timing is implemented. Next: stop counting idle time, with a
+configurable inactivity threshold. Restart checkpoints follow in their own commit.
+Keep focused time labeled honestly until inactivity and sleep handling work.
 
 ## Decisions for later phases
 
