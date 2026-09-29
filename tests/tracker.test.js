@@ -13,6 +13,39 @@ test('only the selected tab in the focused window earns time', () => {
   assert.equal(focusedVisit(window, visits, true), null);
 });
 
+test('idle and locked states stop timing even when the tab stays selected', () => {
+  assert.equal(focusedVisit(window, visits, false, 'idle'), null);
+  assert.equal(focusedVisit(window, visits, false, 'locked'), null);
+  assert.equal(focusedVisit(window, visits, false, 'active'), 10);
+});
+
+test('idle ends the interval and a new input starts one without the idle gap', () => {
+  const idle = changeFocus({ visitId: 10, startedAt: 1000 }, focusedVisit(window, visits, false, 'idle'), 31000);
+  const active = changeFocus(idle.current, focusedVisit(window, visits, false, 'active'), 90000);
+  const switched = changeFocus(active.current, 20, 95000);
+  assert.equal(idle.finished.milliseconds, 30000);
+  assert.equal(active.finished, null);
+  assert.equal(switched.finished.milliseconds, 5000);
+  assert.equal(idle.finished.milliseconds + switched.finished.milliseconds, 35000);
+});
+
+test('repeated idle checks and an unlock while paused cannot add time', () => {
+  const stopped = changeFocus({ visitId: 10, startedAt: 1000 },
+    focusedVisit(window, visits, false, 'locked'), 4000);
+  const stillLocked = changeFocus(stopped.current,
+    focusedVisit(window, visits, false, 'locked'), 15000);
+  const unlockedButPaused = changeFocus(stillLocked.current,
+    focusedVisit(window, visits, true, 'active'), 20000);
+  const resumed = changeFocus(unlockedButPaused.current,
+    focusedVisit(window, visits, false, 'active'), 30000);
+  const ended = changeFocus(resumed.current, null, 32000);
+  assert.equal(stopped.finished.milliseconds, 3000);
+  assert.equal(stillLocked.finished, null);
+  assert.equal(unlockedButPaused.finished, null);
+  assert.equal(resumed.finished, null);
+  assert.equal(ended.finished.milliseconds, 2000);
+});
+
 test('ignores private, loading, discarded, unsupported, and unrecorded pages', () => {
   for (const change of [
     { incognito: true }, { status: 'loading' }, { discarded: true },

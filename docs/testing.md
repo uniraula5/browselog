@@ -5,6 +5,7 @@ Check JavaScript syntax from the repository root:
 ```bash
 node --check src/popup.js
 npm test
+npm run test:browser
 ```
 
 ## Popup checks in Chrome
@@ -26,8 +27,14 @@ npm test
 - Pause for several seconds and resume: the paused gap should not count.
 - Refresh the popup twice: the first interval should not be added twice.
 - Reload a website: the new visit should start with its own timer.
+- Change the idle threshold and reopen the popup: the setting should persist.
+- Leave Chrome untouched past the threshold: the current visit should stop growing.
+- Return and interact: timing should resume without adding the idle gap.
+- Lock the computer: timing should stop; unlock and interact to resume.
+- Check older records: their timing should say "Focused (earlier version)".
+- Restart Chrome: the idle threshold, pause setting, and visits should persist.
 
-Focused time still includes idle time and does not measure engagement.
+The first idle threshold interval still counts, so this remains an estimate.
 Same-page app navigation is not recorded yet. An unfinished interval may be lost
 on browser shutdown; do not claim restart or sleep recovery is complete.
 
@@ -45,3 +52,11 @@ background tabs, window switching, minimizing, pause/resume, reloads, tab closur
 and focused-time rendering. The visit-history and persistence checks still pass.
 Switching to a different desktop app remains a manual check; the unit tests cover
 the unfocused-window state. Idle, sleep, and unfinished-interval recovery are pending.
+
+## Milestone 4 results
+
+The browser test uses an isolated Chrome profile and local web pages. It checks
+visit privacy, timing when tabs change, pause/resume, threshold persistence, and
+old timing labels. It also checks that settings and visits survive a restart.
+The actual wait for idle and screen lock still need manual verification on a
+desktop. The unit tests cover both idle and locked state transitions.

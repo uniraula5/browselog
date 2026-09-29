@@ -5,7 +5,7 @@ import { makeVisit } from '../src/storage.js';
 test('removes credentials, query parameters, and fragments before saving', () => {
   const visit = makeVisit({ id: 3, url: 'https://user:secret@example.com/article?token=secret#private', title: ' Article ' }, 123);
   assert.deepEqual(visit, {
-    url: 'https://example.com/article', site: 'example.com', title: 'Article', tabId: 3, visitedAt: 123
+    url: 'https://example.com/article', site: 'example.com', title: 'Article', tabId: 3, visitedAt: 123, timingVersion: 2
   });
 });
 

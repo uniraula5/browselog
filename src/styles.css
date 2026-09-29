@@ -82,3 +82,6 @@ footer { margin-top: 22px; font-size: 11px; color: #526761; }
 #visits li { padding: 10px 0; border-bottom: 1px solid #d8ded5; overflow-wrap: anywhere; }
 #visits strong, #visits span { display: block; }
 #visits span { margin-top: 4px; color: #526761; }
+.idle-setting { display: block; margin-top: 14px; font-size: 12px; }
+select { width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #d8ded5; border-radius: 8px; background: #fff; color: #183b35; }
+select:focus-visible { outline: 3px solid #689c32; outline-offset: 2px; }

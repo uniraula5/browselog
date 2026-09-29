@@ -9,16 +9,19 @@ time, then show what content I spend time on. Activity history will stay local.
 
 ## Current version
 
-Milestone 3 adds focused time to the ten most recent visits. Only the selected
-tab in the focused browser window earns time; switching away or pausing stops it.
+Milestone 4 estimates active browsing time for the ten most recent visits. Only
+the selected tab in the focused browser window earns time. Timing stops when the
+browser loses focus, recording is paused, or the computer becomes idle or locked.
+Choose a 30-second, 1-minute, 2-minute, or 5-minute idle threshold in the popup.
 Recording starts when installed. Refresh or reopen the popup to update the list.
-**Idle detection, search extraction, and video tracking are not implemented yet.**
+**Search extraction and video tracking are not implemented yet.**
 Navigation inside apps without a full page load is a later milestone.
 
-Focused time starts after a recorded page load. It includes unattended time while
-the browser stays focused. Totals are saved on tab/window changes and popup reads;
-the unfinished interval may be lost when Chrome closes or the extension reloads.
-Sleep handling and restart recovery are later milestones. This is not engaged time yet.
+Time starts after a recorded page load. The first idle threshold interval still
+counts, so the number is an estimate of activity rather than proof of attention.
+Older visits show their original focused-time value with a separate label, since
+those values may include longer idle periods. The unfinished interval may be lost
+when Chrome closes or the extension reloads. Restart recovery comes next.
 
 ## Install locally
 
@@ -29,13 +32,16 @@ Sleep handling and restart recovery are later milestones. This is not engaged ti
 5. Pin BrowseLog from the extensions menu.
 6. Open a website and click the BrowseLog toolbar button.
 
-After editing files, click **Reload** on the extension card and reopen the popup.
+After editing files, click **Reload** on the extension card, reload open website
+tabs, and reopen the popup. This starts a new visit for the updated timer.
 No build step, account, or API key is needed.
 
 ## Privacy and permissions
 
-The `tabs` permission reads page URLs and titles; `storage` saves the pause setting
-and keeps the current timer in memory across background worker suspensions.
+The `tabs` permission reads page URLs and titles; `storage` saves settings and
+keeps the current timer across background worker suspensions. The `idle`
+permission detects computer inactivity and screen lock. Chrome 116 or newer is
+required for the idle-state check used on every timing update.
 A background worker saves visits in local IndexedDB. Nothing is sent off-device.
 Incognito and non-web pages are excluded. URLs lose credentials, query parameters,
 and fragments, but paths and titles can still contain personal information.
@@ -50,6 +56,10 @@ For now, uninstalling the extension removes its local data.
 - `docs/testing.md`: checks to run after changes.
 - `tests/`: visit filtering and timing checks. Run `npm test` with Node.js 20 or newer.
 
+For a real browser check, use Node.js 22 or newer and run `npm run test:browser`.
+The script uses Chrome on macOS by default. Set `BROWSELOG_CHROME` to another
+Chrome executable if needed. It creates a temporary profile and local test pages.
+
 Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 
 ## Progress
@@ -57,7 +67,8 @@ Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 - [x] Extension setup and current-page popup
 - [x] Local visit history and pause control
 - [x] Focused-tab time tracking
-- [ ] Idle detection and restart recovery
+- [x] Configurable idle detection
+- [ ] Restart recovery
 - [ ] Search queries and YouTube activity
 - [ ] Content categories and personal rules
 - [ ] Daily and weekly dashboard

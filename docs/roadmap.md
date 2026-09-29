@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Focused-tab timing is implemented. Next: stop counting idle time, with a
-configurable inactivity threshold. Restart checkpoints follow in their own commit.
-Keep focused time labeled honestly until inactivity and sleep handling work.
+Focused-tab timing and configurable idle detection are implemented. Next:
+save checkpoints and recover cleanly from browser restarts and sleep. Review
+old timing records separately because they may contain idle time.
 
 ## Decisions for later phases
 

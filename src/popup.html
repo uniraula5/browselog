@@ -28,10 +28,17 @@
       <h2 id="progress-heading">Recent visits</h2>
       <p id="recording-status" role="status">Loading history…</p>
       <button id="pause" type="button" disabled>Loading…</button>
+      <label class="idle-setting" for="idle-seconds">Stop counting after</label>
+      <select id="idle-seconds" disabled>
+        <option value="30">30 seconds without input</option>
+        <option value="60">1 minute without input</option>
+        <option value="120">2 minutes without input</option>
+        <option value="300">5 minutes without input</option>
+      </select>
       <ol id="visits" aria-label="Ten most recent visits"></ol>
-      <p class="notice">Focused time includes idle time for now. Refresh to update.</p>
+      <p class="notice">Time is an estimate. Refresh to update it.</p>
     </section>
   </main>
-  <footer>Milestone 3 <span aria-hidden="true">·</span> v0.3.0</footer>
+  <footer>Milestone 4 <span aria-hidden="true">·</span> v0.4.0</footer>
 </body>
 </html>

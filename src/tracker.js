@@ -1,7 +1,7 @@
 import { makeVisit } from './storage.js';
 
-export function focusedVisit(window, tabVisits, paused) {
-  if (paused || !window?.focused || window.state === 'minimized') return null;
+export function focusedVisit(window, tabVisits, paused, idleState = 'active') {
+  if (paused || idleState !== 'active' || !window?.focused || window.state === 'minimized') return null;
   const tab = window?.tabs?.find(item => item.active);
   if (!tab || tab.status !== 'complete' || tab.discarded) return null;
   const page = makeVisit(tab);

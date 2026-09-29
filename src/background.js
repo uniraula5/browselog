@@ -1,8 +1,19 @@
-import { makeVisit, saveVisit, recentVisits, addFocusedTime } from './storage.js';
+import { makeVisit, saveVisit, recentVisits, addActiveTime } from './storage.js';
 import { focusedVisit, changeFocus } from './tracker.js';
 
 let pending = Promise.resolve();
 let saveError = '';
+const IDLE_OPTIONS = [30, 60, 120, 300];
+const DEFAULT_IDLE_SECONDS = 60;
+
+// This must run when the worker starts because the worker can be stopped by Chrome.
+chrome.storage.local.get('idleSeconds').then(({ idleSeconds }) => {
+  chrome.idle.setDetectionInterval(IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS);
+}).catch(error => console.error('Could not set idle threshold', error));
+
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === 'update') chrome.storage.session.remove(['tabVisits', 'focus']).catch(reportError);
+});
 
 // Finish earlier visits before confirming pause, so they cannot appear afterward.
 function enqueue(work) {
@@ -11,18 +22,21 @@ function enqueue(work) {
   return result;
 }
 
-async function syncFocus(update, now) {
+async function syncFocus(update, now, idleOverride) {
   const { tabVisits = {}, focus = null } = await chrome.storage.session.get(['tabVisits', 'focus']);
   if (update) {
     if (update.visit) tabVisits[update.tabId] = update.visit;
     else delete tabVisits[update.tabId];
   }
-  const { paused = false } = await chrome.storage.local.get('paused');
+  const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS } = await chrome.storage.local.get(['paused', 'idleSeconds']);
+  const threshold = IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS;
+  const idleState = idleOverride || await chrome.idle.queryState(threshold);
   const window = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
-  const next = changeFocus(focus, focusedVisit(window, tabVisits, paused), now);
+  const next = changeFocus(focus, focusedVisit(window, tabVisits, paused, idleState), now);
   // Advance the session first so a failed history write cannot count time twice.
   await chrome.storage.session.set({ tabVisits, focus: next.current });
-  if (next.finished) await addFocusedTime(next.finished.visitId, next.finished.milliseconds);
+  if (next.finished) await addActiveTime(next.finished.visitId, next.finished.milliseconds);
+  return { idleState, threshold };
 }
 
 function reportError(error) {
@@ -30,15 +44,16 @@ function reportError(error) {
   console.error('Could not save activity', error);
 }
 
-function refreshFocus(update) {
+function refreshFocus(update, idleState) {
   const now = Date.now();
-  enqueue(() => syncFocus(update, now)).catch(reportError);
+  enqueue(() => syncFocus(update, now, idleState)).catch(reportError);
 }
 
 chrome.tabs.onActivated.addListener(() => refreshFocus());
 chrome.windows.onFocusChanged.addListener(() => refreshFocus());
 chrome.windows.onBoundsChanged.addListener(() => refreshFocus());
 chrome.tabs.onRemoved.addListener(tabId => refreshFocus({ tabId }));
+chrome.idle.onStateChanged.addListener(state => refreshFocus(null, state));
 
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (!['loading', 'complete'].includes(change.status)) return;
@@ -57,16 +72,21 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (sender.url !== chrome.runtime.getURL('popup.html')) return;
-  if (!['history', 'pause'].includes(message.type)) return;
+  if (!['history', 'pause', 'idleSetting'].includes(message.type)) return;
   const now = Date.now();
   enqueue(async () => {
     if (message.type === 'pause') {
       if (typeof message.paused !== 'boolean') throw new Error('Invalid pause setting');
       await chrome.storage.local.set({ paused: message.paused });
     }
-    await syncFocus(null, now);
+    if (message.type === 'idleSetting') {
+      if (!IDLE_OPTIONS.includes(message.seconds)) throw new Error('Invalid idle threshold');
+      await chrome.storage.local.set({ idleSeconds: message.seconds });
+      chrome.idle.setDetectionInterval(message.seconds);
+    }
+    const { idleState, threshold } = await syncFocus(null, now);
     const { paused = false } = await chrome.storage.local.get('paused');
-    return { paused, visits: await recentVisits(), saveError };
+    return { paused, idleState, idleSeconds: threshold, visits: await recentVisits(), saveError };
   }).then(reply, () => reply({ error: 'Could not load history or update recording. Try again.' }));
   return true;
 });

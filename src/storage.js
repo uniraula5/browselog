@@ -7,7 +7,7 @@ export function makeVisit(tab, visitedAt = Date.now()) {
   url.username = url.password = url.search = url.hash = '';
   return {
     url: url.href, site: url.hostname, title: tab.title?.trim() || 'Untitled page',
-    tabId: tab.id, visitedAt
+    tabId: tab.id, visitedAt, timingVersion: 2
   };
 }
 
@@ -36,7 +36,7 @@ export async function saveVisit(visit) {
   } finally { db.close(); }
 }
 
-export async function addFocusedTime(id, milliseconds) {
+export async function addActiveTime(id, milliseconds) {
   if (milliseconds <= 0) return;
   const db = await openDatabase();
   try {
@@ -47,7 +47,7 @@ export async function addFocusedTime(id, milliseconds) {
       request.onsuccess = () => {
         if (!request.result) return;
         const visit = request.result;
-        visit.focusedMs = (visit.focusedMs || 0) + milliseconds;
+        visit.activeMs = (visit.activeMs || 0) + milliseconds;
         visits.put(visit);
       };
       transaction.oncomplete = resolve;
