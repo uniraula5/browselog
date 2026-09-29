@@ -33,10 +33,16 @@ npm run test:browser
 - Lock the computer: timing should stop; unlock and interact to resume.
 - Check older records: their timing should say "Focused (earlier version)".
 - Restart Chrome: the idle threshold, pause setting, and visits should persist.
+- Leave a page active for over 30 seconds: its saved time should increase even
+  without opening the popup or switching tabs.
+- Restart with open tabs: record new visits without counting the time Chrome
+  was closed. A duplicate visit for one restored page is a bug.
+- Open a page while paused, then resume: it should gain a fresh visit and timer.
+- Sleep past a checkpoint: the delayed event should add at most 60 seconds.
 
 The first idle threshold interval still counts, so this remains an estimate.
-Same-page app navigation is not recorded yet. An unfinished interval may be lost
-on browser shutdown; do not claim restart or sleep recovery is complete.
+Same-page app navigation is not recorded yet. The final interval may be partly
+lost on shutdown if the last checkpoint has not run.
 
 ## Milestone 2 results
 
@@ -60,3 +66,12 @@ visit privacy, timing when tabs change, pause/resume, threshold persistence, and
 old timing labels. It also checks that settings and visits survive a restart.
 The actual wait for idle and screen lock still need manual verification on a
 desktop. The unit tests cover both idle and locked state transitions.
+
+## Milestone 5 results
+
+The browser test checks that an alarm fires and advances the saved checkpoint,
+then restarts Chrome twice. It verifies pause and settings persistence, a fresh
+visit after restart, and a visit for a page opened while paused when recording
+resumes. The timing unit tests cover delayed alarms and regular checkpoints.
+Real computer sleep still needs a manual check; alarms can run later than their
+scheduled time, so a delayed interval is capped at one minute.

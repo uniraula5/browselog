@@ -49,7 +49,8 @@ async function evaluate(sessionId, expression) {
   const response = await command('Runtime.evaluate', {
     expression, awaitPromise: true, returnByValue: true
   }, sessionId);
-  if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
+  if (response.exceptionDetails) throw new Error(
+    response.exceptionDetails.exception?.description || response.exceptionDetails.text);
   return response.result.value;
 }
 
@@ -65,13 +66,13 @@ async function eventually(check, label) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function launch() {
+async function launch(startPage = 'about:blank') {
   await rm(path.join(profile, 'DevToolsActivePort'), { force: true });
   browser = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-sync',
     '--disable-background-networking', '--remote-debugging-port=0',
     `--user-data-dir=${profile}`, `--disable-extensions-except=${source}`,
-    `--load-extension=${source}`, 'about:blank'
+    `--load-extension=${source}`, startPage
   ], { stdio: 'ignore' });
   let endpoint;
   await eventually(async () => {
@@ -93,8 +94,7 @@ async function launch() {
   });
 }
 
-try {
-  await launch();
+async function findWorker() {
   let worker;
   await eventually(async () => {
     const targets = (await command('Target.getTargets')).targetInfos;
@@ -107,6 +107,21 @@ try {
     }
     return worker;
   }, 'BrowseLog worker');
+  return worker;
+}
+
+async function restart(startPage) {
+  const closed = once(browser, 'exit');
+  await command('Browser.close');
+  await closed;
+  socket.close();
+  socket = null;
+  await launch(startPage);
+}
+
+try {
+  await launch();
+  const worker = await findWorker();
 
   const popupUrl = worker.url.replace('background.js', 'popup.html');
   const popup = await attach((await command('Target.createTarget', { url: popupUrl })).targetId);
@@ -126,6 +141,35 @@ try {
   await wait(450);
   first = (await history()).visits[0];
   assert.ok(first.activeMs >= 300, 'selected page should gain active time');
+  const checkpoint = await evaluate(popup,
+    `chrome.alarms.get('browselog-checkpoint')`);
+  assert.equal(checkpoint.periodInMinutes, 0.5);
+  const readSavedTime = () => evaluate(popup, `(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('browselog', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const milliseconds = await new Promise((resolve, reject) => {
+      const request = db.transaction('visits').objectStore('visits').get(${first.id});
+      request.onsuccess = () => resolve(request.result.activeMs || 0);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return milliseconds;
+  })()`);
+  const savedBeforeCheckpoint = await readSavedTime();
+  const beforeCheckpoint = await evaluate(popup,
+    `chrome.storage.session.get('focus').then(({focus}) => focus.startedAt)`);
+  await evaluate(popup,
+    `chrome.alarms.create('browselog-checkpoint', {when: Date.now() + 1000})`);
+  await eventually(() => evaluate(popup,
+    `chrome.storage.session.get('focus').then(({focus}) => focus?.startedAt > ${beforeCheckpoint})`),
+  'checkpoint alarm');
+  await eventually(async () => (await readSavedTime()) > savedBeforeCheckpoint,
+    'checkpoint saved to IndexedDB');
+  await evaluate(popup,
+    `chrome.alarms.create('browselog-checkpoint', {periodInMinutes: 0.5})`);
 
   const background = await evaluate(popup,
     `chrome.tabs.create({url:'${origin}/background',active:false})`);
@@ -193,24 +237,8 @@ try {
   }
 
   await message({ type: 'pause', paused: true });
-  const closed = once(browser, 'exit');
-  await command('Browser.close');
-  await closed;
-  socket.close();
-  socket = null;
-  await launch();
-  let restoredWorker;
-  await eventually(async () => {
-    const targets = (await command('Target.getTargets')).targetInfos;
-    for (const target of targets.filter(item => item.type === 'service_worker')) {
-      const session = await attach(target.targetId);
-      const matching = await evaluate(session,
-        `typeof chrome !== 'undefined' && chrome.runtime?.getManifest().name === 'BrowseLog'`);
-      await command('Target.detachFromTarget', { sessionId: session });
-      if (matching) restoredWorker = target;
-    }
-    return restoredWorker;
-  }, 'worker after restart');
+  await restart();
+  const restoredWorker = await findWorker();
   const restoredPopup = await attach((await command('Target.createTarget', {
     url: restoredWorker.url.replace('background.js', 'popup.html')
   })).targetId);
@@ -228,8 +256,30 @@ try {
   'page opened while paused');
   assert.equal((await evaluate(restoredPopup,
     `chrome.runtime.sendMessage({type:'history'})`)).visits.length, 3);
+  await evaluate(restoredPopup, `chrome.runtime.sendMessage({type:'pause',paused:false})`);
+  await eventually(() => evaluate(restoredPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.visits.some(visit => visit.url === '${origin}/still-paused'))`),
+  'visit created on resume');
 
-  console.log('PASS Chrome: visit privacy, selected-tab timing, background tabs, tab switches, idle setting, older labels, pause/resume, and restart persistence.');
+  const beforeRestart = await evaluate(restoredPopup,
+    `chrome.runtime.sendMessage({type:'history'})`);
+  const earlierTotal = beforeRestart.visits.find(visit => visit.id === first.id).activeMs;
+  await restart(`${origin}/after-restart`);
+  const startedWorker = await findWorker();
+  const startedPopup = await attach((await command('Target.createTarget', {
+    url: startedWorker.url.replace('background.js', 'popup.html')
+  })).targetId);
+  await eventually(() => evaluate(startedPopup,
+    `document.getElementById('pause')?.disabled === false`), 'popup after second restart');
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.visits.some(visit => visit.url === '${origin}/after-restart'))`),
+  'first visit after restart');
+  const startedHistory = await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`);
+  assert.equal(startedHistory.visits.filter(visit => visit.url === `${origin}/after-restart`).length, 1);
+  assert.equal(startedHistory.visits.find(visit => visit.id === first.id).activeMs, earlierTotal);
+
+  console.log('PASS Chrome: visits, active timing, checkpoint alarm, tab switches, idle setting, older labels, pause/resume, and restart recovery.');
   await command('Browser.close');
 } finally {
   socket?.close();

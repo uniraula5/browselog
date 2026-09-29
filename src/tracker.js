@@ -9,12 +9,12 @@ export function focusedVisit(window, tabVisits, paused, idleState = 'active') {
   return page && visit?.url === page.url ? visit.id : null;
 }
 
-export function changeFocus(current, visitId, now) {
+export function changeFocus(current, visitId, now, maxGapMs = Infinity) {
   // Each update closes the old interval and starts a fresh one at the same time.
   return {
     finished: current ? {
       visitId: current.visitId,
-      milliseconds: Math.max(0, now - current.startedAt)
+      milliseconds: Math.min(maxGapMs, Math.max(0, now - current.startedAt))
     } : null,
     current: visitId === null ? null : { visitId, startedAt: now }
   };

@@ -9,19 +9,23 @@ time, then show what content I spend time on. Activity history will stay local.
 
 ## Current version
 
-Milestone 4 estimates active browsing time for the ten most recent visits. Only
+Milestone 5 estimates active browsing time for the ten most recent visits. Only
 the selected tab in the focused browser window earns time. Timing stops when the
 browser loses focus, recording is paused, or the computer becomes idle or locked.
 Choose a 30-second, 1-minute, 2-minute, or 5-minute idle threshold in the popup.
-Recording starts when installed. Refresh or reopen the popup to update the list.
+Recording starts when installed. A checkpoint saves the current timer about every
+30 seconds. After a browser restart, open tabs get fresh visits when recording is
+enabled, without counting the time Chrome was closed. Refresh or reopen the popup
+to update the list.
 **Search extraction and video tracking are not implemented yet.**
 Navigation inside apps without a full page load is a later milestone.
 
 Time starts after a recorded page load. The first idle threshold interval still
 counts, so the number is an estimate of activity rather than proof of attention.
 Older visits show their original focused-time value with a separate label, since
-those values may include longer idle periods. The unfinished interval may be lost
-when Chrome closes or the extension reloads. Restart recovery comes next.
+those values may include longer idle periods. The last few seconds of an
+unfinished interval may be lost when Chrome closes. If an alarm fires late after
+sleep, BrowseLog counts at most 60 seconds of that gap rather than the full gap.
 
 ## Install locally
 
@@ -32,16 +36,16 @@ when Chrome closes or the extension reloads. Restart recovery comes next.
 5. Pin BrowseLog from the extensions menu.
 6. Open a website and click the BrowseLog toolbar button.
 
-After editing files, click **Reload** on the extension card, reload open website
-tabs, and reopen the popup. This starts a new visit for the updated timer.
+After editing files, click **Reload** on the extension card and reopen the popup.
+BrowseLog creates fresh visits for open tabs when the updated version starts.
 No build step, account, or API key is needed.
 
 ## Privacy and permissions
 
 The `tabs` permission reads page URLs and titles; `storage` saves settings and
 keeps the current timer across background worker suspensions. The `idle`
-permission detects computer inactivity and screen lock. Chrome 116 or newer is
-required for the idle-state check used on every timing update.
+permission detects computer inactivity and screen lock. The `alarms` permission
+schedules timer checkpoints. Chrome 120 or newer is required.
 A background worker saves visits in local IndexedDB. Nothing is sent off-device.
 Incognito and non-web pages are excluded. URLs lose credentials, query parameters,
 and fragments, but paths and titles can still contain personal information.
@@ -68,7 +72,7 @@ Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 - [x] Local visit history and pause control
 - [x] Focused-tab time tracking
 - [x] Configurable idle detection
-- [ ] Restart recovery
+- [x] Timer checkpoints and restart recovery
 - [ ] Search queries and YouTube activity
 - [ ] Content categories and personal rules
 - [ ] Daily and weekly dashboard

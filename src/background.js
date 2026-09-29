@@ -5,15 +5,19 @@ let pending = Promise.resolve();
 let saveError = '';
 const IDLE_OPTIONS = [30, 60, 120, 300];
 const DEFAULT_IDLE_SECONDS = 60;
+const CHECKPOINT_ALARM = 'browselog-checkpoint';
+// A delayed alarm after sleep should never credit the entire sleep period.
+const MAX_GAP_MS = 60_000;
 
 // This must run when the worker starts because the worker can be stopped by Chrome.
 chrome.storage.local.get('idleSeconds').then(({ idleSeconds }) => {
   chrome.idle.setDetectionInterval(IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS);
 }).catch(error => console.error('Could not set idle threshold', error));
 
-chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === 'update') chrome.storage.session.remove(['tabVisits', 'focus']).catch(reportError);
-});
+// Alarms can disappear after a browser restart, so check each time the worker starts.
+chrome.alarms.get(CHECKPOINT_ALARM).then(alarm => {
+  if (!alarm) return chrome.alarms.create(CHECKPOINT_ALARM, { periodInMinutes: 0.5 });
+}).catch(error => console.error('Could not schedule checkpoints', error));
 
 // Finish earlier visits before confirming pause, so they cannot appear afterward.
 function enqueue(work) {
@@ -32,7 +36,7 @@ async function syncFocus(update, now, idleOverride) {
   const threshold = IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS;
   const idleState = idleOverride || await chrome.idle.queryState(threshold);
   const window = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
-  const next = changeFocus(focus, focusedVisit(window, tabVisits, paused, idleState), now);
+  const next = changeFocus(focus, focusedVisit(window, tabVisits, paused, idleState), now, MAX_GAP_MS);
   // Advance the session first so a failed history write cannot count time twice.
   await chrome.storage.session.set({ tabVisits, focus: next.current });
   if (next.finished) await addActiveTime(next.finished.visitId, next.finished.milliseconds);
@@ -49,6 +53,36 @@ function refreshFocus(update, idleState) {
   enqueue(() => syncFocus(update, now, idleState)).catch(reportError);
 }
 
+async function restoreOpenTabs(now) {
+  const { paused = false } = await chrome.storage.local.get('paused');
+  if (paused) return;
+  const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
+  const windows = await chrome.windows.getAll({ populate: true });
+  for (const window of windows) {
+    for (const tab of window.tabs || []) {
+      if (tab.status !== 'complete' || tab.discarded || tabVisits[tab.id]) continue;
+      const visit = makeVisit(tab, now);
+      if (!visit) continue;
+      tabVisits[tab.id] = { id: await saveVisit(visit), url: visit.url };
+    }
+  }
+  await chrome.storage.session.set({ tabVisits });
+  await syncFocus(null, now);
+}
+
+chrome.runtime.onStartup.addListener(() => {
+  enqueue(() => restoreOpenTabs(Date.now())).catch(reportError);
+});
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  enqueue(async () => {
+    if (reason === 'update') await chrome.storage.session.remove(['tabVisits', 'focus']);
+    await restoreOpenTabs(Date.now());
+  }).catch(reportError);
+});
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === CHECKPOINT_ALARM) refreshFocus();
+});
+
 chrome.tabs.onActivated.addListener(() => refreshFocus());
 chrome.windows.onFocusChanged.addListener(() => refreshFocus());
 chrome.windows.onBoundsChanged.addListener(() => refreshFocus());
@@ -63,7 +97,9 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
     const visit = change.status === 'complete' ? makeVisit(tab, now) : null;
     const { paused = false } = await chrome.storage.local.get('paused');
     if (!paused && visit) {
-      saved = { id: await saveVisit(visit), url: visit.url };
+      const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
+      saved = tabVisits[tabId]?.url === visit.url ? tabVisits[tabId] :
+        { id: await saveVisit(visit), url: visit.url };
       saveError = '';
     }
     await syncFocus({ tabId, visit: saved }, now);
@@ -78,6 +114,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (message.type === 'pause') {
       if (typeof message.paused !== 'boolean') throw new Error('Invalid pause setting');
       await chrome.storage.local.set({ paused: message.paused });
+      if (!message.paused) await restoreOpenTabs(now);
     }
     if (message.type === 'idleSetting') {
       if (!IDLE_OPTIONS.includes(message.seconds)) throw new Error('Invalid idle threshold');

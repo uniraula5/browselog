@@ -81,3 +81,23 @@ test('pause or loss of focus leaves a gap until focus resumes', () => {
 test('a backward clock adjustment never subtracts saved time', () => {
   assert.equal(changeFocus({ visitId: 10, startedAt: 3000 }, null, 2000).finished.milliseconds, 0);
 });
+
+test('a delayed checkpoint cannot count a long sleep as browsing', () => {
+  const beforeSleep = { visitId: 10, startedAt: 1000 };
+  const afterWake = changeFocus(beforeSleep, 10, 3_601_000, 60_000);
+  assert.equal(afterWake.finished.milliseconds, 60_000);
+  assert.equal(afterWake.current.startedAt, 3_601_000);
+  const next = changeFocus(afterWake.current, null, 3_606_000, 60_000);
+  assert.equal(next.finished.milliseconds, 5000);
+});
+
+test('regular checkpoints still add the full active interval', () => {
+  let current = { visitId: 10, startedAt: 0 };
+  let total = 0;
+  for (const now of [30_000, 60_000, 90_000, 120_000]) {
+    const step = changeFocus(current, 10, now, 60_000);
+    total += step.finished.milliseconds;
+    current = step.current;
+  }
+  assert.equal(total, 120_000);
+});

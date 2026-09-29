@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Focused-tab timing and configurable idle detection are implemented. Next:
-save checkpoints and recover cleanly from browser restarts and sleep. Review
-old timing records separately because they may contain idle time.
+Focused-tab timing, idle detection, checkpoints, and restart recovery are done.
+Next: extract supported search queries, then track individual YouTube videos
+and Shorts. Same-page navigation needs separate handling in that phase.
 
 ## Decisions for later phases
 
