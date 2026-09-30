@@ -2,6 +2,7 @@ import { allVisits, setVisitLabels } from './storage.js';
 import { PURPOSES, TOPICS } from './labels.js';
 import { engagedTime, summarize } from './summary.js';
 import { normalizeSite } from './settings.js';
+import { makeExample, saveExample } from './learning.js';
 
 const range = document.getElementById('range');
 const formatFilter = document.getElementById('format-filter');
@@ -12,6 +13,7 @@ const timeline = document.getElementById('timeline');
 let visits = [];
 let rules = [];
 let excludedSites = [];
+let learnedExamples = [];
 
 function duration(milliseconds) {
   const minutes = Math.floor(milliseconds / 60000);
@@ -121,15 +123,26 @@ function visitRow(visit) {
   save.textContent = 'Save labels';
   remove.type = 'button';
   remove.textContent = 'Delete visit';
-  source.textContent = visit.labelSource || 'earlier record';
+  source.textContent = visit.labelSource === 'learned'
+    ? `learned from ${visit.learnedFrom} corrections`
+    : visit.labelSource || 'earlier record';
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
-      await setVisitLabels(visit.id, purpose.value, topic.value);
+      const saved = await setVisitLabels(visit.id, purpose.value, topic.value);
+      if (!saved) throw new Error('Visit no longer exists');
+      if (purpose.value !== 'unknown' || topic.value !== 'unknown') {
+        learnedExamples = saveExample(learnedExamples,
+          makeExample(visit, purpose.value, topic.value));
+      } else {
+        learnedExamples = learnedExamples.filter(example => example.id !== visit.id);
+      }
+      await chrome.storage.local.set({ learnedExamples });
       visit.purpose = purpose.value;
       visit.topic = topic.value;
       visit.labelSource = 'manual';
-      status.textContent = 'Labels saved locally.';
+      showLearningCount();
+      status.textContent = 'Labels saved locally for future visits.';
       render();
     } catch {
       status.textContent = 'Could not save labels. Try again.';
@@ -211,6 +224,20 @@ function showSettings() {
   if (!excludedSites.length) excludeList.textContent = 'No excluded sites.';
 }
 
+function showLearningCount() {
+  const count = learnedExamples.length;
+  document.getElementById('learning-count').textContent = count
+    ? `${count} corrected ${count === 1 ? 'visit' : 'visits'} saved for learning.`
+    : 'No corrections saved for learning yet.';
+}
+
+document.getElementById('reset-learning').addEventListener('click', async () => {
+  await chrome.storage.local.remove('learnedExamples');
+  learnedExamples = [];
+  showLearningCount();
+  status.textContent = 'Learned patterns forgotten. Manual visit labels remain.';
+});
+
 document.getElementById('rule-form').addEventListener('submit', async event => {
   event.preventDefault();
   const site = normalizeSite(document.getElementById('rule-site').value);
@@ -246,8 +273,8 @@ document.getElementById('exclude-form').addEventListener('submit', async event =
 document.getElementById('export').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'history' });
   const data = {
-    version: 1, exportedAt: new Date().toISOString(),
-    visits: await allVisits(), rules, excludedSites
+    version: 2, exportedAt: new Date().toISOString(),
+    visits: await allVisits(), rules, excludedSites, learnedExamples
   };
   const address = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json'
@@ -274,11 +301,13 @@ async function reload() {
   try {
     await chrome.runtime.sendMessage({ type: 'history' });
     visits = await allVisits();
-    const settings = await chrome.storage.local.get(['rules', 'excludedSites']);
+    const settings = await chrome.storage.local.get(['rules', 'excludedSites', 'learnedExamples']);
     rules = Array.isArray(settings.rules) ? settings.rules : [];
     excludedSites = Array.isArray(settings.excludedSites) ? settings.excludedSites : [];
+    learnedExamples = Array.isArray(settings.learnedExamples) ? settings.learnedExamples : [];
     render();
     showSettings();
+    showLearningCount();
     status.textContent = `Loaded ${visits.length} local visits.`;
   } catch {
     status.textContent = 'Could not load activity. Try refreshing the page.';

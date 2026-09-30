@@ -4,6 +4,7 @@ import {
 } from './storage.js';
 import { focusedVisit, changeFocus, samePage } from './tracker.js';
 import { classifyVisit } from './labels.js';
+import { removeExample } from './learning.js';
 import { isExcluded } from './settings.js';
 
 let pending = Promise.resolve();
@@ -71,10 +72,10 @@ function sessionVisit(id, visit) {
 }
 
 async function recordVisit(visit) {
-  const { rules = [], excludedSites = [] } =
-    await chrome.storage.local.get(['rules', 'excludedSites']);
+  const { rules = [], excludedSites = [], learnedExamples = [] } =
+    await chrome.storage.local.get(['rules', 'excludedSites', 'learnedExamples']);
   if (isExcluded(visit.site, excludedSites)) return null;
-  return saveVisit({ ...visit, ...classifyVisit(visit, rules) });
+  return saveVisit({ ...visit, ...classifyVisit(visit, rules, learnedExamples) });
 }
 
 async function restoreOpenTabs(now) {
@@ -124,8 +125,9 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
       const earlier = tabVisits[tabId];
       if (samePage(earlier, page)) {
-        const { rules = [] } = await chrome.storage.local.get('rules');
-        await updateVisitTitle(earlier.id, change.title, rules);
+        const { rules = [], learnedExamples = [] } =
+          await chrome.storage.local.get(['rules', 'learnedExamples']);
+        await updateVisitTitle(earlier.id, change.title, rules, learnedExamples);
       }
     }).catch(reportError);
   }
@@ -215,6 +217,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (message.type === 'deleteVisit') {
         if (!Number.isInteger(message.id) || message.id < 1) throw new Error('Invalid visit ID');
         await deleteVisit(message.id);
+        const { learnedExamples = [] } = await chrome.storage.local.get('learnedExamples');
+        await chrome.storage.local.set({
+          learnedExamples: removeExample(learnedExamples, message.id)
+        });
         const { tabVisits = {}, focus = null } = await chrome.storage.session.get(['tabVisits', 'focus']);
         for (const [tabId, visit] of Object.entries(tabVisits)) {
           if (visit.id === message.id) delete tabVisits[tabId];
@@ -224,6 +230,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
         });
       } else {
         await clearVisits();
+        await chrome.storage.local.remove('learnedExamples');
         await chrome.storage.session.remove(['tabVisits', 'focus']);
       }
       return { ok: true };

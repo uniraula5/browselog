@@ -58,6 +58,14 @@ npm run test:browser
 - Pause the player or switch tabs: Playing estimate should stop rising.
 - Leave the video playing without input: playback may rise while active time
   stops after the idle threshold. Lock the computer: playback should stop too.
+- Correct several pages from one site in the dashboard. A new page there should
+  show a learned label; an explicit site rule should still win.
+- Correct similar videos and then an unrelated video. Only the similar one
+  should pick up the learned label. Shorts stay separate from regular videos.
+- Use **Forget learned patterns**. Earlier manual labels should remain, while
+  new visits return to keyword or rule labels.
+- Delete a corrected visit and check that its example is gone. Deleting all
+  history should clear every example.
 
 The first idle threshold interval still counts, so this remains an estimate.
 Other same-page app navigation is not recorded yet. The final interval may be partly

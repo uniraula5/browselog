@@ -72,7 +72,7 @@ export async function addActiveTime(id, milliseconds) {
   } finally { db.close(); }
 }
 
-export async function updateVisitTitle(id, title, rules = []) {
+export async function updateVisitTitle(id, title, rules = [], examples = []) {
   const cleanTitle = title?.trim().slice(0, 500);
   if (!cleanTitle) return;
   const db = await openDatabase();
@@ -85,7 +85,8 @@ export async function updateVisitTitle(id, title, rules = []) {
         if (!request.result || request.result.title === cleanTitle) return;
         const updated = { ...request.result, title: cleanTitle };
         if (updated.labelSource !== 'manual') {
-          Object.assign(updated, classifyVisit(updated, rules));
+          delete updated.learnedFrom;
+          Object.assign(updated, classifyVisit(updated, rules, examples));
         }
         visits.put(updated);
       };
@@ -109,9 +110,9 @@ export async function setVisitLabels(id, purpose, topic) {
       const request = visits.get(id);
       request.onsuccess = () => {
         if (!request.result) return;
-        visits.put({
-          ...request.result, purpose, topic, labelSource: 'manual'
-        });
+        const updatedVisit = { ...request.result, purpose, topic, labelSource: 'manual' };
+        delete updatedVisit.learnedFrom;
+        visits.put(updatedVisit);
         updated = true;
       };
       transaction.oncomplete = () => resolve(updated);

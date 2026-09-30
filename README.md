@@ -4,7 +4,7 @@ BrowseLog is a Chrome extension I built to see where my browsing time goes. It
 records visits to normal websites, supported searches, and individual YouTube
 videos and Shorts. Everything stays in the browser's local storage.
 
-## What version 0.1 does
+## What version 0.2 does
 
 - Records page visits across tabs, including background tabs. Only the selected
   tab in the focused Chrome window earns active time.
@@ -15,8 +15,8 @@ videos and Shorts. Everything stays in the browser's local storage.
 - Estimates YouTube playback time while a video plays in the visible, focused
   tab. Playback can continue during computer idle, but stops on screen lock.
 - Suggests format, topic, and purpose labels from simple keywords. Unknown
-  content stays unknown. You can correct labels on individual visits or add a
-  site rule for future visits.
+  content stays unknown. You can correct labels on individual visits; those
+  corrections teach future labels on this device. Site rules take priority.
 - Shows today, last seven days, and all-time summaries, breakdowns, and a
   filterable activity timeline. Engaged time counts overlapping active and
   playback time once.
@@ -25,6 +25,21 @@ videos and Shorts. Everything stays in the browser's local storage.
 
 The labels are guesses. They cannot tell whether a video was useful or whether
 I was actually paying attention.
+
+## Teach BrowseLog
+
+Open the activity dashboard and use **Save labels** on visits you know. Two
+similar videos or searches can teach a future item with matching title words.
+Three consistently labeled ordinary pages can teach future pages on that site.
+Videos and Shorts stay separate, so a gaming video does not turn all of YouTube
+into gaming. The dashboard shows whether each label came from keywords, a site
+rule, your correction, or a learned pattern.
+
+Learning uses up to 300 recent corrections. Conflicting examples leave a label
+unknown or with its keyword suggestion. Corrections affect future visits; they
+do not silently rewrite old records. **Forget learned patterns** removes the
+training examples but keeps labels you saved on individual visits. Deleting a
+visit removes its example, and deleting all history clears all examples.
 
 ## Install
 
@@ -57,7 +72,9 @@ computer is not locked.
 BrowseLog does not send activity anywhere. It excludes incognito and browser
 pages. Saved URLs lose credentials, query parameters, and fragments, but paths
 and titles may still be personal. Supported search terms (up to 500 characters)
-and YouTube video IDs are stored separately. An export contains these details.
+and YouTube video IDs are stored separately. Learning examples also contain
+the corrected visit's site and title or search term. An export contains these
+details.
 Excluding a site stops future recording for that site and its subdomains; delete
 older visits separately if needed.
 
@@ -86,8 +103,9 @@ Chrome extension APIs, and IndexedDB.
 
 Existing Chrome history is not imported. Search-term extraction covers Google,
 Bing, and YouTube; other search engines appear as ordinary visits. Other sites'
-same-page navigation is not tracked yet. Keyword labels are intentionally simple;
-manual corrections and site rules are available when they get something wrong.
+same-page navigation is not tracked yet. Learned labels rely on similar words
+or repeated site corrections, so new topics and mixed-purpose sites still need
+review. No remote model analyzes page content or watches videos.
 
 See [testing notes](docs/testing.md) for checks that still need a real desktop,
 such as screen lock and sleep.

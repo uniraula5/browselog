@@ -143,9 +143,9 @@ try {
   const message = details => evaluate(popup, `chrome.runtime.sendMessage(${JSON.stringify(details)})`);
   const history = () => message({ type: 'history' });
 
-  assert.equal(await evaluate(popup, `chrome.runtime.getManifest().version`), '0.1.0');
+  assert.equal(await evaluate(popup, `chrome.runtime.getManifest().version`), '0.2.0');
   assert.equal(await evaluate(popup,
-    `document.querySelector('footer').textContent.includes('v0.1.0')`), true);
+    `document.querySelector('footer').textContent.includes('v0.2.0')`), true);
   assert.equal((await history()).idleSeconds, 60);
   assert.equal((await history()).visits.length, 0);
   const page = await evaluate(popup,
@@ -609,6 +609,39 @@ try {
       result.videos[0].topic === 'gaming' && result.videos[0].labelSource === 'manual')`),
   'manual labels saved');
 
+  // Three corrected pages on one site should teach a later page on that site.
+  await evaluate(dashboard, `(() => {
+    document.getElementById('format-filter').value = 'webpage';
+    document.getElementById('format-filter').dispatchEvent(new Event('change'));
+    document.getElementById('text-filter').value = '127.0.0.1';
+    document.getElementById('text-filter').dispatchEvent(new Event('input'));
+  })()`);
+  for (let index = 0; index < 3; index++) {
+    await evaluate(dashboard, `(() => {
+      const row = document.querySelectorAll('#timeline li')[${index}];
+      row.querySelector('[aria-label="Purpose"]').value = 'entertainment';
+      row.querySelector('[aria-label="Topic"]').value = 'gaming';
+      row.querySelector('button').click();
+    })()`);
+    await eventually(() => evaluate(dashboard,
+      `chrome.storage.local.get('learnedExamples').then(result => result.learnedExamples?.length === ${index + 2})`),
+    'manual correction added to learning');
+  }
+  await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${origin}/learned-check',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result =>
+      result.visits.some(visit => visit.url === '${origin}/learned-check' &&
+        visit.purpose === 'entertainment' && visit.topic === 'gaming' &&
+        visit.labelSource === 'learned' && visit.learnedFrom === 3))`),
+  'learned label applied to new visit');
+  await evaluate(dashboard, `(() => {
+    document.getElementById('text-filter').value = '';
+    document.getElementById('text-filter').dispatchEvent(new Event('input'));
+    document.getElementById('format-filter').value = 'video';
+    document.getElementById('format-filter').dispatchEvent(new Event('change'));
+  })()`);
+
   await evaluate(dashboard, `(() => {
     document.getElementById('rule-site').value = '127.0.0.1';
     document.getElementById('rule-purpose').value = 'learning';
@@ -623,7 +656,8 @@ try {
   await eventually(() => evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'}).then(result =>
       result.visits.some(visit => visit.url === '${origin}/rule-check' &&
-        visit.purpose === 'learning' && visit.topic === 'technology'))`),
+        visit.purpose === 'learning' && visit.topic === 'technology' &&
+        visit.labelSource === 'rule'))`),
   'site rule applied to new visit');
 
   const searchesBeforeExclude = (await evaluate(startedPopup,
@@ -655,6 +689,9 @@ try {
     `chrome.runtime.sendMessage({type:'history'}).then(result =>
       result.videos.every(video => video.id !== ${deletedId}))`),
   'individual visit deleted');
+  assert.equal(await evaluate(dashboard,
+    `chrome.storage.local.get('learnedExamples').then(result =>
+      result.learnedExamples.every(example => example.id !== ${deletedId}))`), true);
 
   const downloads = path.join(profile, 'downloads');
   await mkdir(downloads);
@@ -666,15 +703,18 @@ try {
     try { exported = JSON.parse(await readFile(exportFile, 'utf8')); return true; }
     catch { return false; }
   }, 'local JSON export');
-  assert.equal(exported.version, 1);
+  assert.equal(exported.version, 2);
   assert.equal(exported.excludedSites.includes('google.com'), true);
   assert.equal(exported.rules[0].site, '127.0.0.1');
   assert.equal(exported.visits.every(visit => visit.id !== deletedId), true);
+  assert.equal(exported.learnedExamples.length, 3);
 
   await evaluate(dashboard, `document.getElementById('clear').click()`);
   await eventually(() => evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'}).then(result => result.visits.length === 0)`),
   'history cleared');
+  assert.equal(await evaluate(dashboard,
+    `chrome.storage.local.get('learnedExamples').then(result => !result.learnedExamples)`), true);
   await evaluate(startedPopup,
     `chrome.tabs.create({url:'${origin}/after-clear',active:true})`);
   await eventually(() => evaluate(startedPopup,
@@ -682,7 +722,29 @@ try {
       result.visits.length === 1 && result.visits[0].url === '${origin}/after-clear')`),
   'recording after history clear');
 
-  console.log('PASS Chrome: timing, searches, videos, dashboard, labels, rules, exclusions, deletion, and export.');
+  await evaluate(dashboard, `document.getElementById('reload').click()`);
+  await eventually(() => evaluate(dashboard,
+    `document.getElementById('status').textContent.startsWith('Loaded 1')`),
+  'dashboard after clearing');
+  await evaluate(dashboard, `(() => {
+    document.getElementById('format-filter').value = 'webpage';
+    document.getElementById('format-filter').dispatchEvent(new Event('change'));
+    const row = document.querySelector('#timeline li');
+    row.querySelector('[aria-label="Purpose"]').value = 'learning';
+    row.querySelector('[aria-label="Topic"]').value = 'education';
+    row.querySelector('button').click();
+  })()`);
+  await eventually(() => evaluate(dashboard,
+    `chrome.storage.local.get('learnedExamples').then(result => result.learnedExamples?.length === 1)`),
+  'new correction stored');
+  await evaluate(dashboard, `document.getElementById('reset-learning').click()`);
+  await eventually(() => evaluate(dashboard,
+    `chrome.storage.local.get('learnedExamples').then(result => !result.learnedExamples)`),
+  'learning reset');
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).visits[0].labelSource, 'manual');
+
+  console.log('PASS Chrome: timing, searches, videos, dashboard, learning, rules, exclusions, deletion, and export.');
   await command('Browser.close');
 } finally {
   socket?.close();
