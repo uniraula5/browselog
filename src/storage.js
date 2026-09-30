@@ -1,14 +1,22 @@
+import { parseSearch } from './searches.js';
+
 export function makeVisit(tab, visitedAt = Date.now()) {
   if (tab.incognito || !tab.url) return null;
   let url;
   try { url = new URL(tab.url); } catch { return null; }
   if (!['http:', 'https:'].includes(url.protocol)) return null;
+  const search = parseSearch(tab.url);
   // Strip credentials, queries, and fragments before anything reaches disk.
   url.username = url.password = url.search = url.hash = '';
-  return {
+  const visit = {
     url: url.href, site: url.hostname, title: tab.title?.trim() || 'Untitled page',
     tabId: tab.id, visitedAt, timingVersion: 2
   };
+  if (search) {
+    visit.searchEngine = search.engine;
+    visit.searchQuery = search.query;
+  }
+  return visit;
 }
 
 function openDatabase() {
@@ -57,7 +65,7 @@ export async function addActiveTime(id, milliseconds) {
   } finally { db.close(); }
 }
 
-export async function recentVisits() {
+async function recentRows(searchesOnly) {
   const db = await openDatabase();
   try {
     return await new Promise((resolve, reject) => {
@@ -66,7 +74,8 @@ export async function recentVisits() {
       const cursor = transaction.objectStore('visits').index('visitedAt').openCursor(null, 'prev');
       cursor.onsuccess = () => {
         if (!cursor.result || rows.length === 10) return;
-        rows.push(cursor.result.value);
+        const visit = cursor.result.value;
+        if (!searchesOnly || visit.searchQuery) rows.push(visit);
         cursor.result.continue();
       };
       transaction.oncomplete = () => resolve(rows);
@@ -75,3 +84,6 @@ export async function recentVisits() {
     });
   } finally { db.close(); }
 }
+
+export const recentVisits = () => recentRows(false);
+export const recentSearches = () => recentRows(true);

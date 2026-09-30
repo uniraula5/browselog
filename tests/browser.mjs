@@ -1,10 +1,10 @@
 // Runs the real extension in a temporary Chrome profile against local pages.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import http from 'node:http';
+import https from 'node:https';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -16,13 +16,25 @@ if (!existsSync(chromePath)) {
 
 const source = path.resolve('src');
 const profile = await mkdtemp(path.join(tmpdir(), 'browselog-browser-'));
-const server = http.createServer((request, response) => {
+execFileSync('openssl', [
+  'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+  '-keyout', path.join(profile, 'key.pem'),
+  '-out', path.join(profile, 'cert.pem'),
+  '-days', '1', '-subj', '/CN=www.bing.com'
+], { stdio: 'ignore' });
+const server = https.createServer({
+  key: await readFile(path.join(profile, 'key.pem')),
+  cert: await readFile(path.join(profile, 'cert.pem'))
+}, (request, response) => {
   response.writeHead(200, { 'Content-Type': 'text/html' });
   response.end(`<title>Local ${request.url.split('?')[0]}</title><h1>Local test page</h1>`);
 });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
-const origin = `http://127.0.0.1:${server.address().port}`;
+const origin = `https://127.0.0.1:${server.address().port}`;
+const bingOrigin = `https://www.bing.com:${server.address().port}`;
+const googleOrigin = `https://www.google.com:${server.address().port}`;
+const youtubeOrigin = `https://www.youtube.com:${server.address().port}`;
 
 let browser;
 let socket;
@@ -71,6 +83,8 @@ async function launch(startPage = 'about:blank') {
   browser = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-sync',
     '--disable-background-networking', '--remote-debugging-port=0',
+    '--no-proxy-server', '--ignore-certificate-errors',
+    '--host-resolver-rules=MAP www.bing.com 127.0.0.1, MAP www.google.com 127.0.0.1, MAP www.youtube.com 127.0.0.1',
     `--user-data-dir=${profile}`, `--disable-extensions-except=${source}`,
     `--load-extension=${source}`, startPage
   ], { stdio: 'ignore' });
@@ -140,7 +154,11 @@ try {
   assert.equal(first.timingVersion, 2);
   await wait(450);
   first = (await history()).visits[0];
-  assert.ok(first.activeMs >= 300, 'selected page should gain active time');
+  if ((await history()).idleState === 'active') {
+    assert.ok(first.activeMs >= 300, 'selected page should gain active time');
+  } else {
+    assert.equal(first.activeMs || 0, 0, 'an idle computer should not gain time');
+  }
   const checkpoint = await evaluate(popup,
     `chrome.alarms.get('browselog-checkpoint')`);
   assert.equal(checkpoint.periodInMinutes, 0.5);
@@ -158,18 +176,20 @@ try {
     db.close();
     return milliseconds;
   })()`);
-  const savedBeforeCheckpoint = await readSavedTime();
-  const beforeCheckpoint = await evaluate(popup,
-    `chrome.storage.session.get('focus').then(({focus}) => focus.startedAt)`);
-  await evaluate(popup,
-    `chrome.alarms.create('browselog-checkpoint', {when: Date.now() + 1000})`);
-  await eventually(() => evaluate(popup,
-    `chrome.storage.session.get('focus').then(({focus}) => focus?.startedAt > ${beforeCheckpoint})`),
-  'checkpoint alarm');
-  await eventually(async () => (await readSavedTime()) > savedBeforeCheckpoint,
-    'checkpoint saved to IndexedDB');
-  await evaluate(popup,
-    `chrome.alarms.create('browselog-checkpoint', {periodInMinutes: 0.5})`);
+  if ((await history()).idleState === 'active') {
+    const savedBeforeCheckpoint = await readSavedTime();
+    const beforeCheckpoint = await evaluate(popup,
+      `chrome.storage.session.get('focus').then(({focus}) => focus.startedAt)`);
+    await evaluate(popup,
+      `chrome.alarms.create('browselog-checkpoint', {when: Date.now() + 1000})`);
+    await eventually(() => evaluate(popup,
+      `chrome.storage.session.get('focus').then(({focus}) => focus?.startedAt > ${beforeCheckpoint})`),
+    'checkpoint alarm');
+    await eventually(async () => (await readSavedTime()) > savedBeforeCheckpoint,
+      'checkpoint saved to IndexedDB');
+    await evaluate(popup,
+      `chrome.alarms.create('browselog-checkpoint', {periodInMinutes: 0.5})`);
+  }
 
   const background = await evaluate(popup,
     `chrome.tabs.create({url:'${origin}/background',active:false})`);
@@ -180,7 +200,11 @@ try {
   const oldTotal = (await history()).visits.find(visit => visit.id === first.id).activeMs;
   await wait(450);
   assert.equal((await history()).visits.find(visit => visit.id === first.id).activeMs, oldTotal);
-  assert.ok((await history()).visits[0].activeMs >= 300);
+  if ((await history()).idleState === 'active') {
+    assert.ok((await history()).visits[0].activeMs >= 300);
+  } else {
+    assert.equal((await history()).visits[0].activeMs || 0, 0);
+  }
 
   const setting = await message({ type: 'idleSetting', seconds: 30 });
   assert.equal(setting.idleSeconds, 30);
@@ -279,7 +303,119 @@ try {
   assert.equal(startedHistory.visits.filter(visit => visit.url === `${origin}/after-restart`).length, 1);
   assert.equal(startedHistory.visits.find(visit => visit.id === first.id).activeMs, earlierTotal);
 
-  console.log('PASS Chrome: visits, active timing, checkpoint alarm, tab switches, idle setting, older labels, pause/resume, and restart recovery.');
+  // Use a local web server under Bing's hostname to test the real extension.
+  const searchedTab = await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${bingOrigin}/search?q=study+plan&form=QBLH',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.tabs.get(${searchedTab.id}).then(tab => tab.status === 'complete')`),
+  'local search page');
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 1)`),
+  'first saved search');
+  let searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.equal(searches[0].searchEngine, 'Bing');
+  assert.equal(searches[0].searchQuery, 'study plan');
+  assert.equal(searches[0].url, `${bingOrigin}/search`);
+  await evaluate(startedPopup, `document.getElementById('refresh').click()`);
+  await eventually(() => evaluate(startedPopup,
+    `document.getElementById('searches').textContent.includes('study plan')`),
+  'search shown in popup');
+
+  let searchPage;
+  await eventually(async () => {
+    const targets = (await command('Target.getTargets')).targetInfos;
+    searchPage = targets.find(target => target.type === 'page' &&
+      target.url.startsWith(`${bingOrigin}/search`));
+    return searchPage;
+  }, 'search page target');
+  const searchSession = await attach(searchPage.targetId);
+  await evaluate(searchSession,
+    `history.pushState({}, '', '/search?q=exam+schedule')`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 2)`),
+  'search saved after pushState');
+  searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.deepEqual(searches.map(row => row.searchQuery), ['exam schedule', 'study plan']);
+  assert.equal(searches[0].url, searches[1].url);
+
+  // A URL update with the same query should not make a duplicate row.
+  await evaluate(searchSession,
+    `history.pushState({}, '', '/search?q=exam+schedule&form=extra')`);
+  await wait(300);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches.length, 2);
+  await evaluate(startedPopup, `document.getElementById('refresh').click()`);
+  await eventually(() => evaluate(startedPopup,
+    `document.getElementById('searches').textContent.includes('exam schedule')`),
+  'second search shown in popup');
+
+  // A real reload is a new visit, even if the query did not change.
+  await evaluate(startedPopup, `chrome.tabs.reload(${searchedTab.id})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 3)`),
+  'new visit after search reload');
+  searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.equal(searches[0].searchQuery, 'exam schedule');
+  assert.equal(searches[1].searchQuery, 'exam schedule');
+
+  const googleTab = await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${googleOrigin}/search?q=note+taking',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.tabs.get(${googleTab.id}).then(tab => tab.status === 'complete')`),
+  'local Google search page');
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 4)`),
+  'Google search saved');
+  searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.equal(searches[0].searchEngine, 'Google');
+  assert.equal(searches[0].searchQuery, 'note taking');
+  assert.equal(searches[0].url, `${googleOrigin}/search`);
+
+  const youtubeTab = await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${youtubeOrigin}/results?search_query=calculus+lesson',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.tabs.get(${youtubeTab.id}).then(tab => tab.status === 'complete')`),
+  'local YouTube search page');
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 5)`),
+  'YouTube search saved');
+  searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.equal(searches[0].searchEngine, 'YouTube');
+  assert.equal(searches[0].searchQuery, 'calculus lesson');
+  assert.equal(searches[0].url, `${youtubeOrigin}/results`);
+
+  let youtubePage;
+  await eventually(async () => {
+    const targets = (await command('Target.getTargets')).targetInfos;
+    youtubePage = targets.find(target => target.type === 'page' &&
+      target.url.startsWith(`${youtubeOrigin}/results`));
+    return youtubePage;
+  }, 'YouTube page target');
+  const youtubeSession = await attach(youtubePage.targetId);
+  await evaluate(youtubeSession,
+    `history.pushState({}, '', '/results?search_query=linear+algebra')`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.searches.length === 6)`),
+  'YouTube same-page search saved');
+  searches = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches;
+  assert.equal(searches[0].searchEngine, 'YouTube');
+  assert.equal(searches[0].searchQuery, 'linear algebra');
+
+  await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'pause',paused:true})`);
+  await evaluate(youtubeSession,
+    `history.pushState({}, '', '/results?search_query=paused+search')`);
+  await wait(300);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches.length, 6);
+
+  console.log('PASS Chrome: visits, timing, checkpoints, restart, search queries, same-page searches, and pause.');
   await command('Browser.close');
 } finally {
   socket?.close();

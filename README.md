@@ -9,16 +9,18 @@ time, then show what content I spend time on. Activity history will stay local.
 
 ## Current version
 
-Milestone 5 estimates active browsing time for the ten most recent visits. Only
+Milestone 6 estimates active browsing time for the ten most recent visits. Only
 the selected tab in the focused browser window earns time. Timing stops when the
 browser loses focus, recording is paused, or the computer becomes idle or locked.
 Choose a 30-second, 1-minute, 2-minute, or 5-minute idle threshold in the popup.
 Recording starts when installed. A checkpoint saves the current timer about every
 30 seconds. After a browser restart, open tabs get fresh visits when recording is
 enabled, without counting the time Chrome was closed. Refresh or reopen the popup
-to update the list.
-**Search extraction and video tracking are not implemented yet.**
-Navigation inside apps without a full page load is a later milestone.
+to update the list. The popup also shows the ten most recent Google, Bing, and
+YouTube searches. Search terms are saved when a results page opens, including
+same-page searches that change the URL without reloading.
+**Individual video and Shorts tracking is not implemented yet.** Other same-page
+navigation is still a later milestone.
 
 Time starts after a recorded page load. The first idle threshold interval still
 counts, so the number is an estimate of activity rather than proof of attention.
@@ -45,10 +47,14 @@ No build step, account, or API key is needed.
 The `tabs` permission reads page URLs and titles; `storage` saves settings and
 keeps the current timer across background worker suspensions. The `idle`
 permission detects computer inactivity and screen lock. The `alarms` permission
-schedules timer checkpoints. Chrome 120 or newer is required.
+schedules timer checkpoints. `webNavigation` catches searches inside sites that
+change the URL without a page load. Chrome 120 or newer is required.
 A background worker saves visits in local IndexedDB. Nothing is sent off-device.
 Incognito and non-web pages are excluded. URLs lose credentials, query parameters,
-and fragments, but paths and titles can still contain personal information.
+and fragments. Supported search terms are saved separately as plain text (up to
+500 characters). Paths, titles, and search terms can contain personal information.
+Only Google, Bing, and YouTube search result URLs are parsed for terms; other
+search engines still appear as ordinary visits.
 Existing browser history is not imported. Background page loads count as visits,
 not engaged time. Pausing keeps existing records; deletion controls come later.
 For now, uninstalling the extension removes its local data.
@@ -58,11 +64,12 @@ For now, uninstalling the extension removes its local data.
 - `src/`: the extension manifest, popup, and styles.
 - `docs/roadmap.md`: build phases and planned commits.
 - `docs/testing.md`: checks to run after changes.
-- `tests/`: visit filtering and timing checks. Run `npm test` with Node.js 20 or newer.
+- `tests/`: visit, timing, and search checks. Run `npm test` with Node.js 20 or newer.
 
 For a real browser check, use Node.js 22 or newer and run `npm run test:browser`.
 The script uses Chrome on macOS by default. Set `BROWSELOG_CHROME` to another
-Chrome executable if needed. It creates a temporary profile and local test pages.
+Chrome executable if needed. It creates a temporary profile and local HTTPS
+test pages. OpenSSL is needed to create the test certificate.
 
 Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 
@@ -73,7 +80,8 @@ Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 - [x] Focused-tab time tracking
 - [x] Configurable idle detection
 - [x] Timer checkpoints and restart recovery
-- [ ] Search queries and YouTube activity
+- [x] Search queries from supported results pages
+- [ ] Individual YouTube videos and Shorts
 - [ ] Content categories and personal rules
 - [ ] Daily and weekly dashboard
 - [ ] Pause, exclusions, deletion, and export

@@ -6,7 +6,7 @@ export function focusedVisit(window, tabVisits, paused, idleState = 'active') {
   if (!tab || tab.status !== 'complete' || tab.discarded) return null;
   const page = makeVisit(tab);
   const visit = tabVisits[tab.id];
-  return page && visit?.url === page.url ? visit.id : null;
+  return page && visit?.url === page.url && visit.searchQuery === page.searchQuery ? visit.id : null;
 }
 
 export function changeFocus(current, visitId, now, maxGapMs = Infinity) {

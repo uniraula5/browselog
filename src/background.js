@@ -1,4 +1,4 @@
-import { makeVisit, saveVisit, recentVisits, addActiveTime } from './storage.js';
+import { makeVisit, saveVisit, recentVisits, recentSearches, addActiveTime } from './storage.js';
 import { focusedVisit, changeFocus } from './tracker.js';
 
 let pending = Promise.resolve();
@@ -63,7 +63,9 @@ async function restoreOpenTabs(now) {
       if (tab.status !== 'complete' || tab.discarded || tabVisits[tab.id]) continue;
       const visit = makeVisit(tab, now);
       if (!visit) continue;
-      tabVisits[tab.id] = { id: await saveVisit(visit), url: visit.url };
+      tabVisits[tab.id] = {
+        id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery
+      };
     }
   }
   await chrome.storage.session.set({ tabVisits });
@@ -93,16 +95,44 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (!['loading', 'complete'].includes(change.status)) return;
   const now = Date.now();
   enqueue(async () => {
+    // Keep the last visit until onCommitted confirms a full navigation.
+    // History API searches also report loading, but keep the same document.
+    if (change.status === 'loading') return syncFocus(null, now);
     let saved = null;
-    const visit = change.status === 'complete' ? makeVisit(tab, now) : null;
+    const visit = makeVisit(tab, now);
     const { paused = false } = await chrome.storage.local.get('paused');
     if (!paused && visit) {
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
-      saved = tabVisits[tabId]?.url === visit.url ? tabVisits[tabId] :
-        { id: await saveVisit(visit), url: visit.url };
+      const earlier = tabVisits[tabId];
+      saved = earlier?.url === visit.url && earlier.searchQuery === visit.searchQuery ? earlier :
+        { id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery };
       saveError = '';
     }
     await syncFocus({ tabId, visit: saved }, now);
+  }).catch(reportError);
+});
+
+chrome.webNavigation.onCommitted.addListener(details => {
+  if (details.frameId === 0) refreshFocus({ tabId: details.tabId });
+});
+
+// YouTube can change the search URL with history.pushState, without a page load.
+chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
+  if (details.frameId !== 0) return;
+  const now = Date.now();
+  enqueue(async () => {
+    const { paused = false } = await chrome.storage.local.get('paused');
+    if (paused) return;
+    const tab = await chrome.tabs.get(details.tabId).catch(() => null);
+    if (!tab) return;
+    const visit = makeVisit({ ...tab, url: details.url }, now);
+    if (!visit?.searchQuery) return;
+    const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
+    const earlier = tabVisits[details.tabId];
+    if (earlier?.url === visit.url && earlier.searchQuery === visit.searchQuery) return;
+    const saved = { id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery };
+    await syncFocus({ tabId: details.tabId, visit: saved }, now);
+    saveError = '';
   }).catch(reportError);
 });
 
@@ -123,7 +153,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     }
     const { idleState, threshold } = await syncFocus(null, now);
     const { paused = false } = await chrome.storage.local.get('paused');
-    return { paused, idleState, idleSeconds: threshold, visits: await recentVisits(), saveError };
+    return {
+      paused, idleState, idleSeconds: threshold,
+      visits: await recentVisits(), searches: await recentSearches(), saveError
+    };
   }).then(reply, () => reply({ error: 'Could not load history or update recording. Try again.' }));
   return true;
 });

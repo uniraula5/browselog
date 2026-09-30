@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "BrowseLog",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "minimum_chrome_version": "120",
   "description": "A personal browsing activity tracker with local visit history and idle-aware timing.",
-  "permissions": ["tabs", "storage", "idle", "alarms"],
+  "permissions": ["tabs", "storage", "idle", "alarms", "webNavigation"],
   "incognito": "not_allowed",
   "background": { "service_worker": "background.js", "type": "module" },
   "action": {

@@ -101,3 +101,18 @@ test('regular checkpoints still add the full active interval', () => {
   }
   assert.equal(total, 120_000);
 });
+
+test('a new search on the same page needs its own visit before timing resumes', () => {
+  const searchTab = {
+    ...tab, url: 'https://www.youtube.com/results?search_query=calculus'
+  };
+  const searchWindow = { ...window, tabs: [searchTab] };
+  const oldVisit = {
+    1: { id: 30, url: 'https://www.youtube.com/results', searchQuery: 'algebra' }
+  };
+  assert.equal(focusedVisit(searchWindow, oldVisit, false), null);
+  const newVisit = {
+    1: { id: 31, url: 'https://www.youtube.com/results', searchQuery: 'calculus' }
+  };
+  assert.equal(focusedVisit(searchWindow, newVisit, false), 31);
+});

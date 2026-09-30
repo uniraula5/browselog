@@ -1,6 +1,6 @@
 # Build plan
 
-Build one working piece at a time, usually around 300 changed lines per commit.
+Build one working piece at a time, usually a few hundred changed lines per commit.
 Keep commits local unless publishing is requested. Update the README as features land.
 
 | Phase | Planned commits |
@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Focused-tab timing, idle detection, checkpoints, and restart recovery are done.
-Next: extract supported search queries, then track individual YouTube videos
-and Shorts. Same-page navigation needs separate handling in that phase.
+Search queries from Google, Bing, and YouTube results pages are done, including
+same-page search URL changes. Next: track individual YouTube videos and Shorts.
+Playback time and browsing time will stay separate.
 
 ## Decisions for later phases
 

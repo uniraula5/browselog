@@ -4,6 +4,7 @@ Check JavaScript syntax from the repository root:
 
 ```bash
 node --check src/popup.js
+node --check src/background.js
 npm test
 npm run test:browser
 ```
@@ -39,9 +40,15 @@ npm run test:browser
   was closed. A duplicate visit for one restored page is a bug.
 - Open a page while paused, then resume: it should gain a fresh visit and timer.
 - Sleep past a checkpoint: the delayed event should add at most 60 seconds.
+- Search Google, Bing, or YouTube: the query should appear under Recent searches.
+- Change a YouTube search without reloading: the new query should get a new row.
+- Change only an extra search URL parameter: do not make a duplicate row.
+- Reload a search results page: make a new visit for the same query.
+- Search while paused: do not save a new search.
+- Search an unsupported site: keep the visit, without a Recent searches row.
 
 The first idle threshold interval still counts, so this remains an estimate.
-Same-page app navigation is not recorded yet. The final interval may be partly
+Other same-page app navigation is not recorded yet. The final interval may be partly
 lost on shutdown if the last checkpoint has not run.
 
 ## Milestone 2 results
@@ -75,3 +82,12 @@ visit after restart, and a visit for a page opened while paused when recording
 resumes. The timing unit tests cover delayed alarms and regular checkpoints.
 Real computer sleep still needs a manual check; alarms can run later than their
 scheduled time, so a delayed interval is capped at one minute.
+
+## Milestone 6 results
+
+Unit tests cover supported engines, empty queries, unrelated pages, lookalike
+domains, whitespace, URL sanitizing, and search timing. The browser test uses
+temporary HTTPS pages under Google, Bing, and YouTube hostnames to check full
+search loads, same-page changes, duplicate prevention, reloads, popup display,
+and pause. Live sites still need a manual check because their page behavior
+can change.

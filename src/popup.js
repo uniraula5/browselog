@@ -38,6 +38,7 @@ showCurrentPage();
 const pause = document.getElementById('pause');
 const recordingStatus = document.getElementById('recording-status');
 const visits = document.getElementById('visits');
+const searches = document.getElementById('searches');
 const idleSeconds = document.getElementById('idle-seconds');
 let paused = false;
 
@@ -67,6 +68,17 @@ async function loadHistory(message = { type: 'history' }) {
       visits.append(item);
     }
     if (!result.visits.length) visits.textContent = 'No visits yet. Open or reload a website.';
+    searches.replaceChildren();
+    for (const search of result.searches) {
+      const item = document.createElement('li');
+      const query = document.createElement('strong');
+      const detail = document.createElement('span');
+      query.textContent = search.searchQuery;
+      detail.textContent = `${search.searchEngine} · ${new Date(search.visitedAt).toLocaleString()}`;
+      item.append(query, detail);
+      searches.append(item);
+    }
+    if (!result.searches.length) searches.textContent = 'No supported searches yet.';
     pause.disabled = false;
     idleSeconds.disabled = false;
   } catch (error) {
