@@ -54,6 +54,10 @@ npm run test:browser
 - Reload a video page: make a new visit for the same video.
 - Open a video while paused, then resume: it should get a new visit on resume.
 - Confirm the video list shows only the newest ten videos and Shorts.
+- Play a YouTube video while its tab is selected: Playing estimate should rise.
+- Pause the player or switch tabs: Playing estimate should stop rising.
+- Leave the video playing without input: playback may rise while active time
+  stops after the idle threshold. Lock the computer: playback should stop too.
 
 The first idle threshold interval still counts, so this remains an estimate.
 Other same-page app navigation is not recorded yet. The final interval may be partly
@@ -107,3 +111,11 @@ hosts, URL sanitizing, and separate timing for videos sharing the `/watch` URL.
 The isolated Chrome test checks full loads, same-page switches, title changes,
 duplicate prevention, reloads, pause/resume, and the ten-video list limit.
 Playback is not measured yet; the displayed time is active tab time.
+
+## Playback results
+
+The isolated Chrome test plays a local canvas stream in a YouTube-shaped page.
+It checks that playback time grows and then stops after pausing the video. The
+worker accepts short intervals only for the selected, visible YouTube tab and
+keeps playback and active-time overlap separately. Real idle and screen-lock
+transitions still need a manual check.

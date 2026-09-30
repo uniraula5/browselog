@@ -91,6 +91,28 @@ export async function updateVisitTitle(id, title) {
   } finally { db.close(); }
 }
 
+export async function addPlaybackTime(id, milliseconds, overlapsActive) {
+  if (milliseconds <= 0) return;
+  const db = await openDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction('visits', 'readwrite');
+      const visits = transaction.objectStore('visits');
+      const request = visits.get(id);
+      request.onsuccess = () => {
+        if (!request.result?.videoId) return;
+        const visit = request.result;
+        visit.playbackMs = (visit.playbackMs || 0) + milliseconds;
+        if (overlapsActive) visit.overlapMs = (visit.overlapMs || 0) + milliseconds;
+        visits.put(visit);
+      };
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
 async function recentRows(kind) {
   const db = await openDatabase();
   try {

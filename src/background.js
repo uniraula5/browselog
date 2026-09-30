@@ -1,6 +1,6 @@
 import {
   makeVisit, saveVisit, recentVisits, recentSearches, recentVideos,
-  addActiveTime, updateVisitTitle
+  addActiveTime, addPlaybackTime, updateVisitTitle
 } from './storage.js';
 import { focusedVisit, changeFocus, samePage } from './tracker.js';
 
@@ -158,6 +158,31 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message.type === 'playback' && sender.tab && sender.frameId === 0) {
+    const now = Date.now();
+    enqueue(async () => {
+      if (!Number.isFinite(message.milliseconds) || message.milliseconds <= 0) return false;
+      const reported = makeVisit({ url: message.url, id: sender.tab.id });
+      if (!reported?.videoId) return false;
+      const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS } =
+        await chrome.storage.local.get(['paused', 'idleSeconds']);
+      if (paused) return false;
+      const window = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
+      const tab = window?.tabs?.find(item => item.active && item.id === sender.tab.id);
+      if (!window?.focused || window.state === 'minimized' || !tab || tab.discarded) return false;
+      const page = makeVisit(tab, now);
+      if (!page?.videoId || !samePage(page, reported)) return false;
+      const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
+      const saved = tabVisits[tab.id];
+      if (!samePage(saved, page)) return false;
+      const threshold = IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS;
+      const idleState = await chrome.idle.queryState(threshold);
+      if (idleState === 'locked') return false;
+      await addPlaybackTime(saved.id, Math.min(message.milliseconds, 1200), idleState === 'active');
+      return true;
+    }).then(reply, () => reply(false));
+    return true;
+  }
   if (sender.url !== chrome.runtime.getURL('popup.html')) return;
   if (!['history', 'pause', 'idleSetting'].includes(message.type)) return;
   const now = Date.now();

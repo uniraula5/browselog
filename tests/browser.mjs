@@ -531,6 +531,35 @@ try {
   assert.equal(videos[0].videoId, 'QwErTy00007');
   assert.equal(videos[9].videoId, 'QwErTy12345');
 
+  // A canvas stream gives the local page a real playing video without a download.
+  await evaluate(watchSession, `(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 32;
+    const context = canvas.getContext('2d');
+    window.drawTimer = setInterval(() => {
+      context.fillStyle = String(Date.now() % 2) === '0' ? 'red' : 'blue';
+      context.fillRect(0, 0, 32, 32);
+    }, 100);
+    window.testVideo = document.createElement('video');
+    testVideo.muted = true;
+    testVideo.srcObject = canvas.captureStream(10);
+    document.body.append(testVideo);
+    await testVideo.play();
+  })()`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos[0]?.playbackMs > 500)`),
+  'playback time saved');
+  const playing = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos[0];
+  assert.ok(playing.playbackMs > 500);
+  await evaluate(watchSession, `testVideo.pause(); clearInterval(drawTimer)`);
+  await wait(1200);
+  const stopped = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos[0].playbackMs;
+  await wait(1200);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos[0].playbackMs, stopped);
+
   console.log('PASS Chrome: visits, timing, restart, searches, videos, Shorts, title updates, and pause.');
   await command('Browser.close');
 } finally {

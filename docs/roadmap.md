@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Search queries and individual YouTube videos and Shorts are recorded, including
-same-page URL changes. Next: measure video playback time separately from active
-browsing time, without counting the same minute twice in summaries.
+Search queries, individual YouTube videos and Shorts, and playback intervals are
+recorded. Next: add content labels and personal corrections, then summaries that
+subtract overlapping active and playback time.
 
 ## Decisions for later phases
 

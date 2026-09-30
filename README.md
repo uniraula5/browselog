@@ -21,9 +21,11 @@ YouTube searches. Search terms are saved when a results page opens, including
 same-page searches that change the URL without reloading.
 The popup also lists the ten most recent YouTube videos and Shorts, with an
 active-time estimate for each visit. Switching videos inside YouTube starts a
-new visit. **Playback time is not measured yet:** an open video tab only gets
-time while it is selected and the computer is active. Other same-page app
-navigation is still a later milestone.
+new visit. A small script on YouTube pages also estimates actual video playback
+while the tab is visible and Chrome is focused. Playback can continue counting
+while the computer is idle, but stops when it is locked. Active and playback
+time are stored separately; their overlap must be removed when making totals.
+Other same-page app navigation is still a later milestone.
 
 Time starts after a recorded page load. The first idle threshold interval still
 counts, so the number is an estimate of activity rather than proof of attention.
@@ -87,7 +89,7 @@ Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 - [x] Timer checkpoints and restart recovery
 - [x] Search queries from supported results pages
 - [x] Individual YouTube videos and Shorts
-- [ ] Video playback time
+- [x] Video playback time
 - [ ] Content categories and personal rules
 - [ ] Daily and weekly dashboard
 - [ ] Pause, exclusions, deletion, and export

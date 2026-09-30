@@ -90,10 +90,12 @@ async function loadHistory(message = { type: 'history' }) {
       const name = document.createElement('strong');
       const detail = document.createElement('span');
       const timing = document.createElement('span');
+      const playback = document.createElement('span');
       name.textContent = video.title;
       detail.textContent = `${video.videoFormat} · ${new Date(video.visitedAt).toLocaleString()}`;
       timing.textContent = `Active estimate: ${timeLabel(video.activeMs)}`;
-      item.append(name, detail, timing);
+      playback.textContent = `Playing estimate: ${timeLabel(video.playbackMs)}`;
+      item.append(name, detail, timing, playback);
       videos.append(item);
     }
     if (!result.videos.length) videos.textContent = 'No videos or Shorts yet.';

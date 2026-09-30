@@ -7,6 +7,11 @@
   "permissions": ["tabs", "storage", "idle", "alarms", "webNavigation"],
   "incognito": "not_allowed",
   "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [{
+    "matches": ["*://youtube.com/*", "*://*.youtube.com/*"],
+    "js": ["player.js"],
+    "run_at": "document_idle"
+  }],
   "action": {
     "default_title": "Open BrowseLog",
     "default_popup": "popup.html"
