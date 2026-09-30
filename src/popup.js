@@ -113,4 +113,7 @@ async function loadHistory(message = { type: 'history' }) {
 pause.addEventListener('click', () => loadHistory({ type: 'pause', paused: !paused }));
 idleSeconds.addEventListener('change', () => loadHistory({ type: 'idleSetting', seconds: Number(idleSeconds.value) }));
 refresh.addEventListener('click', () => loadHistory());
+document.getElementById('dashboard').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+});
 loadHistory();

@@ -83,5 +83,6 @@ footer { margin-top: 22px; font-size: 11px; color: #526761; }
 #visits strong, #visits span, #searches strong, #searches span, #videos strong, #videos span { display: block; }
 #visits span, #searches span, #videos span { margin-top: 4px; color: #526761; }
 .idle-setting { display: block; margin-top: 14px; font-size: 12px; }
+#dashboard { margin-top: 22px; }
 select { width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #d8ded5; border-radius: 8px; background: #fff; color: #183b35; }
 select:focus-visible { outline: 3px solid #689c32; outline-offset: 2px; }

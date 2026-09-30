@@ -15,8 +15,9 @@ Keep commits local unless publishing is requested. Update the README as features
 ## Next milestone
 
 Search queries, individual YouTube videos and Shorts, playback intervals, and
-basic content labels are recorded. Next: add personal corrections, then summaries
-that subtract overlapping active and playback time.
+basic content labels are recorded. The activity dashboard has corrections and
+summaries that subtract overlapping active and playback time. Next: add personal
+site rules, exclusions, deletion, and export.
 
 ## Decisions for later phases
 

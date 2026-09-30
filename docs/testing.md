@@ -125,3 +125,9 @@ transitions still need a manual check.
 Unit tests check format, purpose, and topic independently. A gaming tutorial can
 be learning and gaming at once; an unknown Short stays unknown. The browser test
 checks that a video title update changes its automatic purpose label.
+
+## Activity dashboard
+
+The browser test opens the activity page, checks totals and timeline filters,
+then corrects a video's purpose and topic. Unit tests check that active browsing
+and playback overlap is counted once in totals, including older visit records.

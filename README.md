@@ -28,6 +28,9 @@ time are stored separately; their overlap must be removed when making totals.
 Other same-page app navigation is still a later milestone.
 Simple title and search keywords suggest a topic and purpose. An uncertain page
 stays **unknown**; the labels are guesses, not a measure of productivity.
+The activity page has today, seven-day, and all-time totals, time breakdowns,
+filters, and a timeline. You can correct the purpose and topic of each visit.
+Engaged time subtracts overlap between active browsing and video playback.
 
 Time starts after a recorded page load. The first idle threshold interval still
 counts, so the number is an estimate of activity rather than proof of attention.
@@ -70,7 +73,7 @@ For now, uninstalling the extension removes its local data.
 
 ## Project layout
 
-- `src/`: the extension manifest, popup, and styles.
+- `src/`: the extension, popup, and activity dashboard.
 - `docs/roadmap.md`: build phases and planned commits.
 - `docs/testing.md`: checks to run after changes.
 - `tests/`: visit, timing, search, and video checks. Run `npm test` with Node.js 20 or newer.
@@ -92,6 +95,7 @@ Built with HTML, CSS, JavaScript, and Chrome's extension APIs.
 - [x] Search queries from supported results pages
 - [x] Individual YouTube videos and Shorts
 - [x] Video playback time
+- [x] Activity dashboard and visit label corrections
 - [ ] Content categories and personal rules
 - [ ] Daily and weekly dashboard
 - [ ] Pause, exclusions, deletion, and export

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BrowseLog activity</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script type="module" src="dashboard.js"></script>
+</head>
+<body>
+  <header>
+    <span class="logo" aria-hidden="true">b.</span>
+    <div>
+      <h1>BrowseLog activity</h1>
+      <p>See where your browser time went. Labels are editable guesses.</p>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <label for="range">Period</label>
+      <select id="range">
+        <option value="today">Today</option>
+        <option value="week">Last 7 days</option>
+        <option value="all">All time</option>
+      </select>
+      <button id="reload" type="button">Refresh</button>
+    </div>
+    <p id="status" role="status">Loading local activity…</p>
+    <section aria-labelledby="totals-heading">
+      <h2 id="totals-heading">Time and activity</h2>
+      <div id="totals" class="totals"></div>
+      <p class="help">Engaged time counts active browsing plus video playback once when they overlap.</p>
+    </section>
+    <section aria-labelledby="breakdown-heading">
+      <h2 id="breakdown-heading">Where the time went</h2>
+      <div class="breakdowns">
+        <div><h3>Purpose</h3><div id="purposes"></div></div>
+        <div><h3>Topic</h3><div id="topics"></div></div>
+        <div><h3>Format</h3><div id="formats"></div></div>
+        <div><h3>Sites</h3><div id="sites"></div></div>
+      </div>
+    </section>
+    <section aria-labelledby="timeline-heading">
+      <h2 id="timeline-heading">Activity timeline</h2>
+      <div class="filters">
+        <label for="format-filter">Format</label>
+        <select id="format-filter">
+          <option value="all">All formats</option>
+          <option value="webpage">Webpage</option>
+          <option value="search">Search</option>
+          <option value="video">Video</option>
+          <option value="shorts">Shorts</option>
+        </select>
+        <label for="purpose-filter">Purpose</label>
+        <select id="purpose-filter">
+          <option value="all">All purposes</option>
+          <option value="learning">Learning</option>
+          <option value="information">Information</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="other">Other</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <label for="text-filter">Find</label>
+        <input id="text-filter" type="search" placeholder="Title, site, or query">
+      </div>
+      <p id="timeline-count" class="help"></p>
+      <ol id="timeline"></ol>
+    </section>
+  </main>
+</body>
+</html>

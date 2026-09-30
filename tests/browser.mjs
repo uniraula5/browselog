@@ -565,7 +565,38 @@ try {
   assert.equal((await evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'})`)).videos[0].playbackMs, stopped);
 
-  console.log('PASS Chrome: visits, timing, restart, searches, videos, Shorts, title updates, and pause.');
+  const dashboardUrl = startedWorker.url.replace('background.js', 'dashboard.html');
+  const dashboard = await attach((await command('Target.createTarget', {
+    url: dashboardUrl
+  })).targetId);
+  await eventually(() => evaluate(dashboard,
+    `document.getElementById('status')?.textContent.startsWith('Loaded')`),
+  'activity dashboard');
+  assert.equal(await evaluate(dashboard,
+    `document.getElementById('totals').textContent.includes('Engaged estimate')`), true);
+  await evaluate(dashboard, `(() => {
+    const range = document.getElementById('range');
+    range.value = 'all';
+    range.dispatchEvent(new Event('change'));
+    const format = document.getElementById('format-filter');
+    format.value = 'video';
+    format.dispatchEvent(new Event('change'));
+  })()`);
+  assert.equal(await evaluate(dashboard,
+    `document.getElementById('timeline-count').textContent.includes('matching visits')`), true);
+  await evaluate(dashboard, `(() => {
+    const first = document.querySelector('#timeline li');
+    first.querySelector('[aria-label="Purpose"]').value = 'entertainment';
+    first.querySelector('[aria-label="Topic"]').value = 'gaming';
+    first.querySelector('button').click();
+  })()`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result =>
+      result.videos[0].purpose === 'entertainment' &&
+      result.videos[0].topic === 'gaming' && result.videos[0].labelSource === 'manual')`),
+  'manual labels saved');
+
+  console.log('PASS Chrome: visits, timing, searches, videos, playback, dashboard, and labels.');
   await command('Browser.close');
 } finally {
   socket?.close();

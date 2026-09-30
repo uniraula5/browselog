@@ -192,7 +192,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     }).then(reply, () => reply(false));
     return true;
   }
-  if (sender.url !== chrome.runtime.getURL('popup.html')) return;
+  if (![chrome.runtime.getURL('popup.html'), chrome.runtime.getURL('dashboard.html')]
+    .includes(sender.url)) return;
   if (!['history', 'pause', 'idleSetting'].includes(message.type)) return;
   const now = Date.now();
   enqueue(async () => {
