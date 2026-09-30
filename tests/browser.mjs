@@ -143,6 +143,9 @@ try {
   const message = details => evaluate(popup, `chrome.runtime.sendMessage(${JSON.stringify(details)})`);
   const history = () => message({ type: 'history' });
 
+  assert.equal(await evaluate(popup, `chrome.runtime.getManifest().version`), '0.1.0');
+  assert.equal(await evaluate(popup,
+    `document.querySelector('footer').textContent.includes('v0.1.0')`), true);
   assert.equal((await history()).idleSeconds, 60);
   assert.equal((await history()).visits.length, 0);
   const page = await evaluate(popup,
@@ -572,6 +575,16 @@ try {
   await eventually(() => evaluate(dashboard,
     `document.getElementById('status')?.textContent.startsWith('Loaded')`),
   'activity dashboard');
+  if (process.env.BROWSELOG_DASHBOARD_SCREENSHOT) {
+    await command('Emulation.setDeviceMetricsOverride', {
+      width: 1280, height: 900, deviceScaleFactor: 1, mobile: false
+    }, dashboard);
+    const screenshot = await command('Page.captureScreenshot', {
+      format: 'png', captureBeyondViewport: false
+    }, dashboard);
+    await writeFile(process.env.BROWSELOG_DASHBOARD_SCREENSHOT,
+      Buffer.from(screenshot.data, 'base64'));
+  }
   assert.equal(await evaluate(dashboard,
     `document.getElementById('totals').textContent.includes('Engaged estimate')`), true);
   await evaluate(dashboard, `(() => {
