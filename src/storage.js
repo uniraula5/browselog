@@ -1,4 +1,5 @@
 import { parseSearch } from './searches.js';
+import { parseVideo } from './videos.js';
 
 export function makeVisit(tab, visitedAt = Date.now()) {
   if (tab.incognito || !tab.url) return null;
@@ -6,6 +7,7 @@ export function makeVisit(tab, visitedAt = Date.now()) {
   try { url = new URL(tab.url); } catch { return null; }
   if (!['http:', 'https:'].includes(url.protocol)) return null;
   const search = parseSearch(tab.url);
+  const video = parseVideo(tab.url);
   // Strip credentials, queries, and fragments before anything reaches disk.
   url.username = url.password = url.search = url.hash = '';
   const visit = {
@@ -15,6 +17,10 @@ export function makeVisit(tab, visitedAt = Date.now()) {
   if (search) {
     visit.searchEngine = search.engine;
     visit.searchQuery = search.query;
+  }
+  if (video) {
+    visit.videoId = video.id;
+    visit.videoFormat = video.format;
   }
   return visit;
 }
@@ -65,7 +71,27 @@ export async function addActiveTime(id, milliseconds) {
   } finally { db.close(); }
 }
 
-async function recentRows(searchesOnly) {
+export async function updateVisitTitle(id, title) {
+  const cleanTitle = title?.trim().slice(0, 500);
+  if (!cleanTitle) return;
+  const db = await openDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction('visits', 'readwrite');
+      const visits = transaction.objectStore('visits');
+      const request = visits.get(id);
+      request.onsuccess = () => {
+        if (!request.result || request.result.title === cleanTitle) return;
+        visits.put({ ...request.result, title: cleanTitle });
+      };
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
+async function recentRows(kind) {
   const db = await openDatabase();
   try {
     return await new Promise((resolve, reject) => {
@@ -75,7 +101,8 @@ async function recentRows(searchesOnly) {
       cursor.onsuccess = () => {
         if (!cursor.result || rows.length === 10) return;
         const visit = cursor.result.value;
-        if (!searchesOnly || visit.searchQuery) rows.push(visit);
+        if (kind === 'all' || (kind === 'search' && visit.searchQuery) ||
+            (kind === 'video' && visit.videoId)) rows.push(visit);
         cursor.result.continue();
       };
       transaction.oncomplete = () => resolve(rows);
@@ -85,5 +112,6 @@ async function recentRows(searchesOnly) {
   } finally { db.close(); }
 }
 
-export const recentVisits = () => recentRows(false);
-export const recentSearches = () => recentRows(true);
+export const recentVisits = () => recentRows('all');
+export const recentSearches = () => recentRows('search');
+export const recentVideos = () => recentRows('video');

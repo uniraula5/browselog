@@ -73,16 +73,15 @@ button {
 button:hover { background: #28554b; }
 button:focus-visible { outline: 3px solid #689c32; outline-offset: 3px; }
 button:disabled { opacity: 0.6; cursor: wait; }
-.progress, .searches { margin-top: 22px; }
-.progress h2 { margin-bottom: 6px; }
-.searches h2 { margin-bottom: 6px; }
+.progress, .searches, .videos { margin-top: 22px; }
+.progress h2, .searches h2, .videos h2 { margin-bottom: 6px; }
 .progress p { margin: 0 0 10px; font-size: 13px; color: #526761; }
 .progress .notice { font-size: 12px; color: #183b35; }
 footer { margin-top: 22px; font-size: 11px; color: #526761; }
-#visits, #searches { padding: 0; list-style: none; max-height: 230px; overflow-y: auto; font-size: 12px; }
-#visits li, #searches li { padding: 10px 0; border-bottom: 1px solid #d8ded5; overflow-wrap: anywhere; }
-#visits strong, #visits span, #searches strong, #searches span { display: block; }
-#visits span, #searches span { margin-top: 4px; color: #526761; }
+#visits, #searches, #videos { padding: 0; list-style: none; max-height: 230px; overflow-y: auto; font-size: 12px; }
+#visits li, #searches li, #videos li { padding: 10px 0; border-bottom: 1px solid #d8ded5; overflow-wrap: anywhere; }
+#visits strong, #visits span, #searches strong, #searches span, #videos strong, #videos span { display: block; }
+#visits span, #searches span, #videos span { margin-top: 4px; color: #526761; }
 .idle-setting { display: block; margin-top: 14px; font-size: 12px; }
 select { width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #d8ded5; border-radius: 8px; background: #fff; color: #183b35; }
 select:focus-visible { outline: 3px solid #689c32; outline-offset: 2px; }

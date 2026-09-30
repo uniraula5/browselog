@@ -39,8 +39,14 @@ const pause = document.getElementById('pause');
 const recordingStatus = document.getElementById('recording-status');
 const visits = document.getElementById('visits');
 const searches = document.getElementById('searches');
+const videos = document.getElementById('videos');
 const idleSeconds = document.getElementById('idle-seconds');
 let paused = false;
+
+function timeLabel(milliseconds) {
+  const seconds = Math.floor((milliseconds || 0) / 1000);
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 
 async function loadHistory(message = { type: 'history' }) {
   pause.disabled = true;
@@ -62,8 +68,7 @@ async function loadHistory(message = { type: 'history' }) {
       name.textContent = visit.title;
       detail.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()}`;
       const older = visit.timingVersion !== 2;
-      const seconds = Math.floor(((older ? visit.focusedMs : visit.activeMs) || 0) / 1000);
-      timing.textContent = `${older ? 'Focused (earlier version)' : 'Active estimate'}: ${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+      timing.textContent = `${older ? 'Focused (earlier version)' : 'Active estimate'}: ${timeLabel(older ? visit.focusedMs : visit.activeMs)}`;
       item.append(name, detail, timing);
       visits.append(item);
     }
@@ -79,6 +84,19 @@ async function loadHistory(message = { type: 'history' }) {
       searches.append(item);
     }
     if (!result.searches.length) searches.textContent = 'No supported searches yet.';
+    videos.replaceChildren();
+    for (const video of result.videos) {
+      const item = document.createElement('li');
+      const name = document.createElement('strong');
+      const detail = document.createElement('span');
+      const timing = document.createElement('span');
+      name.textContent = video.title;
+      detail.textContent = `${video.videoFormat} · ${new Date(video.visitedAt).toLocaleString()}`;
+      timing.textContent = `Active estimate: ${timeLabel(video.activeMs)}`;
+      item.append(name, detail, timing);
+      videos.append(item);
+    }
+    if (!result.videos.length) videos.textContent = 'No videos or Shorts yet.';
     pause.disabled = false;
     idleSeconds.disabled = false;
   } catch (error) {

@@ -415,7 +415,123 @@ try {
   assert.equal((await evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'})`)).searches.length, 6);
 
-  console.log('PASS Chrome: visits, timing, checkpoints, restart, search queries, same-page searches, and pause.');
+  const firstVideoTab = await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${youtubeOrigin}/watch?v=aB_12345-Xy&t=20',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.tabs.get(${firstVideoTab.id}).then(tab => tab.status === 'complete')`),
+  'watch page opened while paused');
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos.length, 0);
+  await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'pause',paused:false})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos.length === 1)`),
+  'video saved when recording resumes');
+  let videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos[0].videoId, 'aB_12345-Xy');
+  assert.equal(videos[0].videoFormat, 'Video');
+  assert.equal(videos[0].url, `${youtubeOrigin}/watch`);
+  assert.equal(JSON.stringify(videos[0]).includes('t=20'), false);
+  if ((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).idleState === 'active') {
+    const { focus } = await evaluate(startedPopup,
+      `chrome.storage.session.get('focus')`);
+    assert.equal(focus.visitId, videos[0].id);
+  }
+
+  let watchPage;
+  await eventually(async () => {
+    const targets = (await command('Target.getTargets')).targetInfos;
+    watchPage = targets.find(target => target.type === 'page' &&
+      target.url.startsWith(`${youtubeOrigin}/watch`));
+    return watchPage;
+  }, 'watch page target');
+  const watchSession = await attach(watchPage.targetId);
+  await evaluate(watchSession,
+    `history.pushState({}, '', '/watch?v=z9Y_87654-a')`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos.length === 2)`),
+  'second watch video saved');
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.deepEqual(videos.map(video => video.videoId), ['z9Y_87654-a', 'aB_12345-Xy']);
+  assert.equal(videos[0].url, videos[1].url);
+
+  await evaluate(watchSession,
+    `history.pushState({}, '', '/watch?v=z9Y_87654-a&t=45')`);
+  await wait(300);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos.length, 2);
+  await evaluate(watchSession, `document.title = 'Second lesson - YouTube'`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos[0].title === 'Second lesson - YouTube')`),
+  'video title updated');
+
+  await evaluate(watchSession,
+    `history.pushState({}, '', '/shorts/QwErTy12345')`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos.length === 3)`),
+  'Shorts visit saved');
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos[0].videoFormat, 'Shorts');
+  assert.equal(videos[0].videoId, 'QwErTy12345');
+  assert.equal(videos[0].url, `${youtubeOrigin}/shorts/QwErTy12345`);
+  assert.equal(videos[0].title, 'Shorts on YouTube');
+  await evaluate(watchSession, `document.title = 'Short lesson - YouTube'`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos[0].title === 'Short lesson - YouTube')`),
+  'Shorts title updated');
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos[1].title, 'Second lesson - YouTube');
+  await evaluate(startedPopup, `document.getElementById('refresh').click()`);
+  await eventually(() => evaluate(startedPopup,
+    `document.getElementById('videos').textContent.includes('Shorts')`),
+  'Shorts shown in popup');
+
+  await evaluate(startedPopup, `chrome.tabs.reload(${firstVideoTab.id})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos.length === 4)`),
+  'new Shorts visit after reload');
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos[0].videoId, 'QwErTy12345');
+  assert.equal(videos[1].videoId, 'QwErTy12345');
+
+  await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'pause',paused:true})`);
+  await evaluate(watchSession,
+    `history.pushState({}, '', '/watch?v=PaUsEd12345')`);
+  await wait(300);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos.length, 4);
+  await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'pause',paused:false})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos.length === 5)`),
+  'new video saved on resume');
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos[0].videoId, 'PaUsEd12345');
+
+  // The video list keeps its newest ten entries, separate from recent visits.
+  for (let number = 0; number < 8; number++) {
+    const videoId = `QwErTy${String(number).padStart(5, '0')}`;
+    await evaluate(watchSession,
+      `history.pushState({}, '', '/watch?v=${videoId}')`);
+    await eventually(() => evaluate(startedPopup,
+      `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos[0]?.videoId === '${videoId}')`),
+    `video ${number} saved`);
+  }
+  videos = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos;
+  assert.equal(videos.length, 10);
+  assert.equal(videos[0].videoId, 'QwErTy00007');
+  assert.equal(videos[9].videoId, 'QwErTy12345');
+
+  console.log('PASS Chrome: visits, timing, restart, searches, videos, Shorts, title updates, and pause.');
   await command('Browser.close');
 } finally {
   socket?.close();

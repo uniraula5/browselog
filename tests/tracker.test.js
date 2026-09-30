@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { focusedVisit, changeFocus } from '../src/tracker.js';
+import { focusedVisit, changeFocus, samePage } from '../src/tracker.js';
 
 const tab = { id: 1, active: true, status: 'complete', url: 'https://example.com/' };
 const visits = { 1: { id: 10, url: tab.url }, 2: { id: 20, url: tab.url } };
@@ -115,4 +115,51 @@ test('a new search on the same page needs its own visit before timing resumes', 
     1: { id: 31, url: 'https://www.youtube.com/results', searchQuery: 'calculus' }
   };
   assert.equal(focusedVisit(searchWindow, newVisit, false), 31);
+});
+
+test('watch videos with the same saved URL get separate timers', () => {
+  const first = {
+    url: 'https://www.youtube.com/watch', videoId: 'aB_12345-Xy',
+    videoFormat: 'Video'
+  };
+  const second = { ...first, videoId: 'z9Y_87654-a' };
+  assert.equal(samePage(first, second), false);
+  assert.equal(samePage(first, { ...first }), true);
+  assert.equal(samePage(null, first), false);
+  const videoTab = {
+    ...tab, url: `https://www.youtube.com/watch?v=${second.videoId}`
+  };
+  const videoWindow = { ...window, tabs: [videoTab] };
+  assert.equal(focusedVisit(videoWindow, { 1: { id: 50, ...first } }, false), null);
+  assert.equal(focusedVisit(videoWindow, { 1: { id: 51, ...second } }, false), 51);
+});
+
+test('switching between watch and Shorts creates distinct visits', () => {
+  const id = 'aB_12345-Xy';
+  const watch = {
+    url: 'https://www.youtube.com/watch', videoId: id, videoFormat: 'Video'
+  };
+  const short = {
+    url: `https://www.youtube.com/shorts/${id}`, videoId: id,
+    videoFormat: 'Shorts'
+  };
+  assert.equal(samePage(watch, short), false);
+  assert.equal(samePage(short, watch), false);
+});
+
+test('a video visit never matches a search visit on the same tab', () => {
+  const search = {
+    url: 'https://www.youtube.com/results', searchQuery: 'calculus'
+  };
+  const video = {
+    url: 'https://www.youtube.com/watch', videoId: 'aB_12345-Xy',
+    videoFormat: 'Video'
+  };
+  assert.equal(samePage(search, video), false);
+  assert.equal(samePage(video, search), false);
+  const selectedVideo = {
+    ...tab, url: 'https://www.youtube.com/watch?v=aB_12345-Xy'
+  };
+  assert.equal(focusedVisit({ ...window, tabs: [selectedVideo] },
+    { 1: { id: 60, ...search } }, false), null);
 });

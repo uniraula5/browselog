@@ -14,9 +14,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 ## Next milestone
 
-Search queries from Google, Bing, and YouTube results pages are done, including
-same-page search URL changes. Next: track individual YouTube videos and Shorts.
-Playback time and browsing time will stay separate.
+Search queries and individual YouTube videos and Shorts are recorded, including
+same-page URL changes. Next: measure video playback time separately from active
+browsing time, without counting the same minute twice in summaries.
 
 ## Decisions for later phases
 

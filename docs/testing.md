@@ -46,6 +46,14 @@ npm run test:browser
 - Reload a search results page: make a new visit for the same query.
 - Search while paused: do not save a new search.
 - Search an unsupported site: keep the visit, without a Recent searches row.
+- Open two YouTube watch URLs: each video should appear separately, even though
+  their saved URLs both end in `/watch`.
+- Move from a watch page to Shorts without a reload: record a new Shorts visit.
+- Change only the video timestamp in the URL: do not make a duplicate row.
+- Change the page title after a same-page video switch: update that visit's title.
+- Reload a video page: make a new visit for the same video.
+- Open a video while paused, then resume: it should get a new visit on resume.
+- Confirm the video list shows only the newest ten videos and Shorts.
 
 The first idle threshold interval still counts, so this remains an estimate.
 Other same-page app navigation is not recorded yet. The final interval may be partly
@@ -91,3 +99,11 @@ temporary HTTPS pages under Google, Bing, and YouTube hostnames to check full
 search loads, same-page changes, duplicate prevention, reloads, popup display,
 and pause. Live sites still need a manual check because their page behavior
 can change.
+
+## Milestone 7 results
+
+Unit tests check watch and Shorts URL parsing, video ID validation, lookalike
+hosts, URL sanitizing, and separate timing for videos sharing the `/watch` URL.
+The isolated Chrome test checks full loads, same-page switches, title changes,
+duplicate prevention, reloads, pause/resume, and the ten-video list limit.
+Playback is not measured yet; the displayed time is active tab time.

@@ -1,5 +1,8 @@
-import { makeVisit, saveVisit, recentVisits, recentSearches, addActiveTime } from './storage.js';
-import { focusedVisit, changeFocus } from './tracker.js';
+import {
+  makeVisit, saveVisit, recentVisits, recentSearches, recentVideos,
+  addActiveTime, updateVisitTitle
+} from './storage.js';
+import { focusedVisit, changeFocus, samePage } from './tracker.js';
 
 let pending = Promise.resolve();
 let saveError = '';
@@ -53,6 +56,13 @@ function refreshFocus(update, idleState) {
   enqueue(() => syncFocus(update, now, idleState)).catch(reportError);
 }
 
+function sessionVisit(id, visit) {
+  return {
+    id, url: visit.url, searchQuery: visit.searchQuery,
+    videoId: visit.videoId, videoFormat: visit.videoFormat
+  };
+}
+
 async function restoreOpenTabs(now) {
   const { paused = false } = await chrome.storage.local.get('paused');
   if (paused) return;
@@ -60,12 +70,10 @@ async function restoreOpenTabs(now) {
   const windows = await chrome.windows.getAll({ populate: true });
   for (const window of windows) {
     for (const tab of window.tabs || []) {
-      if (tab.status !== 'complete' || tab.discarded || tabVisits[tab.id]) continue;
+      if (tab.status !== 'complete' || tab.discarded) continue;
       const visit = makeVisit(tab, now);
-      if (!visit) continue;
-      tabVisits[tab.id] = {
-        id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery
-      };
+      if (!visit || samePage(tabVisits[tab.id], visit)) continue;
+      tabVisits[tab.id] = sessionVisit(await saveVisit(visit), visit);
     }
   }
   await chrome.storage.session.set({ tabVisits });
@@ -92,6 +100,17 @@ chrome.tabs.onRemoved.addListener(tabId => refreshFocus({ tabId }));
 chrome.idle.onStateChanged.addListener(state => refreshFocus(null, state));
 
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
+  if (change.title && !change.status) {
+    enqueue(async () => {
+      const { paused = false } = await chrome.storage.local.get('paused');
+      if (paused) return;
+      const page = makeVisit(tab);
+      if (!page?.videoId) return;
+      const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
+      const earlier = tabVisits[tabId];
+      if (samePage(earlier, page)) await updateVisitTitle(earlier.id, change.title);
+    }).catch(reportError);
+  }
   if (!['loading', 'complete'].includes(change.status)) return;
   const now = Date.now();
   enqueue(async () => {
@@ -104,8 +123,8 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
     if (!paused && visit) {
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
       const earlier = tabVisits[tabId];
-      saved = earlier?.url === visit.url && earlier.searchQuery === visit.searchQuery ? earlier :
-        { id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery };
+      saved = samePage(earlier, visit) ? earlier :
+        sessionVisit(await saveVisit(visit), visit);
       saveError = '';
     }
     await syncFocus({ tabId, visit: saved }, now);
@@ -116,7 +135,7 @@ chrome.webNavigation.onCommitted.addListener(details => {
   if (details.frameId === 0) refreshFocus({ tabId: details.tabId });
 });
 
-// YouTube can change the search URL with history.pushState, without a page load.
+// YouTube can change searches and videos without a page load.
 chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
   if (details.frameId !== 0) return;
   const now = Date.now();
@@ -126,11 +145,13 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
     const tab = await chrome.tabs.get(details.tabId).catch(() => null);
     if (!tab) return;
     const visit = makeVisit({ ...tab, url: details.url }, now);
-    if (!visit?.searchQuery) return;
+    if (!visit?.searchQuery && !visit?.videoId) return;
     const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
     const earlier = tabVisits[details.tabId];
-    if (earlier?.url === visit.url && earlier.searchQuery === visit.searchQuery) return;
-    const saved = { id: await saveVisit(visit), url: visit.url, searchQuery: visit.searchQuery };
+    if (samePage(earlier, visit)) return;
+    // A same-page video switch may still have the previous video's title.
+    if (visit.videoId) visit.title = `${visit.videoFormat} on YouTube`;
+    const saved = sessionVisit(await saveVisit(visit), visit);
     await syncFocus({ tabId: details.tabId, visit: saved }, now);
     saveError = '';
   }).catch(reportError);
@@ -155,7 +176,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const { paused = false } = await chrome.storage.local.get('paused');
     return {
       paused, idleState, idleSeconds: threshold,
-      visits: await recentVisits(), searches: await recentSearches(), saveError
+      visits: await recentVisits(), searches: await recentSearches(),
+      videos: await recentVideos(), saveError
     };
   }).then(reply, () => reply({ error: 'Could not load history or update recording. Try again.' }));
   return true;
