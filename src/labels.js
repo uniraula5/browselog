@@ -1,4 +1,5 @@
 import { siteMatches } from './settings.js';
+import { learnedLabels } from './learning.js';
 
 export const PURPOSES = ['learning', 'information', 'entertainment', 'other', 'unknown'];
 export const TOPICS = ['education', 'gaming', 'news', 'technology', 'other', 'unknown'];
@@ -10,7 +11,7 @@ export function contentFormat(visit) {
   return 'webpage';
 }
 
-export function classifyVisit(visit, rules = []) {
+export function classifyVisit(visit, rules = [], examples = []) {
   const format = contentFormat(visit);
   const rule = (Array.isArray(rules) ? rules : []).find(item => item?.site &&
     siteMatches(visit.site, item.site) &&
@@ -24,6 +25,7 @@ export function classifyVisit(visit, rules = []) {
   const gaming = /\b(gaming|gameplay|minecraft|fortnite|roblox|valorant|gamer)\b/.test(text);
   const news = /\b(news|headlines|current events)\b/.test(text);
   const technology = /\b(programming|coding|javascript|python|software|computer science)\b/.test(text);
+  const entertainment = /\b(funny|comedy|prank|reaction|vlog|movie|trailer|music|song)\b/.test(text);
 
   let topic = 'unknown';
   if (gaming) topic = 'gaming';
@@ -35,6 +37,12 @@ export function classifyVisit(visit, rules = []) {
   if (learning) purpose = 'learning';
   else if (news) purpose = 'information';
   else if (gaming) purpose = 'entertainment';
+  else if (entertainment) purpose = 'entertainment';
 
+  const learned = learnedLabels(visit, format, examples);
+  if (learned) return {
+    format, purpose: learned.purpose || purpose, topic: learned.topic || topic,
+    labelSource: 'learned', learnedFrom: learned.learnedFrom
+  };
   return { format, purpose, topic, labelSource: 'automatic' };
 }

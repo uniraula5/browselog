@@ -25,6 +25,14 @@ test('a gaming tutorial can be learning and gaming at once', () => {
   });
 });
 
+test('obvious entertainment titles get an entertainment purpose', () => {
+  const video = classifyVisit({
+    site: 'www.youtube.com', title: 'Funny cat comedy', videoFormat: 'Video'
+  });
+  assert.equal(video.purpose, 'entertainment');
+  assert.equal(video.topic, 'unknown');
+});
+
 test('searches and Shorts are not automatically called entertainment', () => {
   assert.deepEqual(classifyVisit({
     site: 'www.youtube.com', title: 'Watch', videoFormat: 'Shorts'
