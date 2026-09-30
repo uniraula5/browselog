@@ -388,6 +388,7 @@ try {
   assert.equal(searches[0].searchEngine, 'YouTube');
   assert.equal(searches[0].searchQuery, 'calculus lesson');
   assert.equal(searches[0].url, `${youtubeOrigin}/results`);
+  assert.equal(searches[0].purpose, 'learning');
 
   let youtubePage;
   await eventually(async () => {
@@ -431,6 +432,8 @@ try {
     `chrome.runtime.sendMessage({type:'history'})`)).videos;
   assert.equal(videos[0].videoId, 'aB_12345-Xy');
   assert.equal(videos[0].videoFormat, 'Video');
+  assert.equal(videos[0].format, 'video');
+  assert.equal(videos[0].purpose, 'unknown');
   assert.equal(videos[0].url, `${youtubeOrigin}/watch`);
   assert.equal(JSON.stringify(videos[0]).includes('t=20'), false);
   if ((await evaluate(startedPopup,
@@ -467,6 +470,8 @@ try {
   await eventually(() => evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'}).then(result => result.videos[0].title === 'Second lesson - YouTube')`),
   'video title updated');
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos[0].purpose, 'learning');
 
   await evaluate(watchSession,
     `history.pushState({}, '', '/shorts/QwErTy12345')`);

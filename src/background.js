@@ -3,6 +3,7 @@ import {
   addActiveTime, addPlaybackTime, updateVisitTitle
 } from './storage.js';
 import { focusedVisit, changeFocus, samePage } from './tracker.js';
+import { classifyVisit } from './labels.js';
 
 let pending = Promise.resolve();
 let saveError = '';
@@ -63,6 +64,11 @@ function sessionVisit(id, visit) {
   };
 }
 
+async function recordVisit(visit) {
+  const { rules = [] } = await chrome.storage.local.get('rules');
+  return saveVisit({ ...visit, ...classifyVisit(visit, rules) });
+}
+
 async function restoreOpenTabs(now) {
   const { paused = false } = await chrome.storage.local.get('paused');
   if (paused) return;
@@ -73,7 +79,7 @@ async function restoreOpenTabs(now) {
       if (tab.status !== 'complete' || tab.discarded) continue;
       const visit = makeVisit(tab, now);
       if (!visit || samePage(tabVisits[tab.id], visit)) continue;
-      tabVisits[tab.id] = sessionVisit(await saveVisit(visit), visit);
+      tabVisits[tab.id] = sessionVisit(await recordVisit(visit), visit);
     }
   }
   await chrome.storage.session.set({ tabVisits });
@@ -108,7 +114,10 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
       if (!page?.videoId) return;
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
       const earlier = tabVisits[tabId];
-      if (samePage(earlier, page)) await updateVisitTitle(earlier.id, change.title);
+      if (samePage(earlier, page)) {
+        const { rules = [] } = await chrome.storage.local.get('rules');
+        await updateVisitTitle(earlier.id, change.title, rules);
+      }
     }).catch(reportError);
   }
   if (!['loading', 'complete'].includes(change.status)) return;
@@ -124,7 +133,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
       const earlier = tabVisits[tabId];
       saved = samePage(earlier, visit) ? earlier :
-        sessionVisit(await saveVisit(visit), visit);
+        sessionVisit(await recordVisit(visit), visit);
       saveError = '';
     }
     await syncFocus({ tabId, visit: saved }, now);
@@ -151,7 +160,7 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
     if (samePage(earlier, visit)) return;
     // A same-page video switch may still have the previous video's title.
     if (visit.videoId) visit.title = `${visit.videoFormat} on YouTube`;
-    const saved = sessionVisit(await saveVisit(visit), visit);
+    const saved = sessionVisit(await recordVisit(visit), visit);
     await syncFocus({ tabId: details.tabId, visit: saved }, now);
     saveError = '';
   }).catch(reportError);

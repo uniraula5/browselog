@@ -119,3 +119,9 @@ It checks that playback time grows and then stops after pausing the video. The
 worker accepts short intervals only for the selected, visible YouTube tab and
 keeps playback and active-time overlap separately. Real idle and screen-lock
 transitions still need a manual check.
+
+## Content labels
+
+Unit tests check format, purpose, and topic independently. A gaming tutorial can
+be learning and gaming at once; an unknown Short stays unknown. The browser test
+checks that a video title update changes its automatic purpose label.

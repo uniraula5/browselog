@@ -1,5 +1,6 @@
 import { parseSearch } from './searches.js';
 import { parseVideo } from './videos.js';
+import { classifyVisit, PURPOSES, TOPICS } from './labels.js';
 
 export function makeVisit(tab, visitedAt = Date.now()) {
   if (tab.incognito || !tab.url) return null;
@@ -71,7 +72,7 @@ export async function addActiveTime(id, milliseconds) {
   } finally { db.close(); }
 }
 
-export async function updateVisitTitle(id, title) {
+export async function updateVisitTitle(id, title, rules = []) {
   const cleanTitle = title?.trim().slice(0, 500);
   if (!cleanTitle) return;
   const db = await openDatabase();
@@ -82,9 +83,38 @@ export async function updateVisitTitle(id, title) {
       const request = visits.get(id);
       request.onsuccess = () => {
         if (!request.result || request.result.title === cleanTitle) return;
-        visits.put({ ...request.result, title: cleanTitle });
+        const updated = { ...request.result, title: cleanTitle };
+        if (updated.labelSource !== 'manual') {
+          Object.assign(updated, classifyVisit(updated, rules));
+        }
+        visits.put(updated);
       };
       transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
+export async function setVisitLabels(id, purpose, topic) {
+  if (!PURPOSES.includes(purpose) || !TOPICS.includes(topic)) {
+    throw new Error('Invalid labels');
+  }
+  const db = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      let updated = false;
+      const transaction = db.transaction('visits', 'readwrite');
+      const visits = transaction.objectStore('visits');
+      const request = visits.get(id);
+      request.onsuccess = () => {
+        if (!request.result) return;
+        visits.put({
+          ...request.result, purpose, topic, labelSource: 'manual'
+        });
+        updated = true;
+      };
+      transaction.oncomplete = () => resolve(updated);
       transaction.onabort = () => reject(transaction.error);
       transaction.onerror = () => reject(transaction.error);
     });

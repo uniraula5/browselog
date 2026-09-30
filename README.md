@@ -26,6 +26,8 @@ while the tab is visible and Chrome is focused. Playback can continue counting
 while the computer is idle, but stops when it is locked. Active and playback
 time are stored separately; their overlap must be removed when making totals.
 Other same-page app navigation is still a later milestone.
+Simple title and search keywords suggest a topic and purpose. An uncertain page
+stays **unknown**; the labels are guesses, not a measure of productivity.
 
 Time starts after a recorded page load. The first idle threshold interval still
 counts, so the number is an estimate of activity rather than proof of attention.

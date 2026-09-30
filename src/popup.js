@@ -65,11 +65,13 @@ async function loadHistory(message = { type: 'history' }) {
       const name = document.createElement('strong');
       const detail = document.createElement('span');
       const timing = document.createElement('span');
+      const labels = document.createElement('span');
       name.textContent = visit.title;
       detail.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()}`;
       const older = visit.timingVersion !== 2;
       timing.textContent = `${older ? 'Focused (earlier version)' : 'Active estimate'}: ${timeLabel(older ? visit.focusedMs : visit.activeMs)}`;
-      item.append(name, detail, timing);
+      labels.textContent = `${visit.purpose || 'unknown'} · ${visit.topic || 'unknown'}`;
+      item.append(name, detail, timing, labels);
       visits.append(item);
     }
     if (!result.visits.length) visits.textContent = 'No visits yet. Open or reload a website.';
@@ -91,11 +93,13 @@ async function loadHistory(message = { type: 'history' }) {
       const detail = document.createElement('span');
       const timing = document.createElement('span');
       const playback = document.createElement('span');
+      const labels = document.createElement('span');
       name.textContent = video.title;
       detail.textContent = `${video.videoFormat} · ${new Date(video.visitedAt).toLocaleString()}`;
       timing.textContent = `Active estimate: ${timeLabel(video.activeMs)}`;
       playback.textContent = `Playing estimate: ${timeLabel(video.playbackMs)}`;
-      item.append(name, detail, timing, playback);
+      labels.textContent = `${video.purpose || 'unknown'} · ${video.topic || 'unknown'}`;
+      item.append(name, detail, timing, playback, labels);
       videos.append(item);
     }
     if (!result.videos.length) videos.textContent = 'No videos or Shorts yet.';
