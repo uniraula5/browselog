@@ -16,8 +16,9 @@ Keep commits local unless publishing is requested. Update the README as features
 
 Search queries, individual YouTube videos and Shorts, playback intervals, and
 basic content labels are recorded. The activity dashboard has corrections and
-summaries that subtract overlapping active and playback time. Next: add personal
-site rules, exclusions, deletion, and export.
+summaries that subtract overlapping active and playback time. Site rules,
+exclusions, deletion, and export are implemented. Next: finish the 0.1 release
+documentation and manual browser checks.
 
 ## Decisions for later phases
 

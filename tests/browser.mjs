@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import https from 'node:https';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -596,7 +596,80 @@ try {
       result.videos[0].topic === 'gaming' && result.videos[0].labelSource === 'manual')`),
   'manual labels saved');
 
-  console.log('PASS Chrome: visits, timing, searches, videos, playback, dashboard, and labels.');
+  await evaluate(dashboard, `(() => {
+    document.getElementById('rule-site').value = '127.0.0.1';
+    document.getElementById('rule-purpose').value = 'learning';
+    document.getElementById('rule-topic').value = 'technology';
+    document.getElementById('rule-form').requestSubmit();
+  })()`);
+  await eventually(() => evaluate(dashboard,
+    `chrome.storage.local.get('rules').then(({rules}) => rules?.[0]?.site === '127.0.0.1')`),
+  'site rule saved');
+  await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${origin}/rule-check',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result =>
+      result.visits.some(visit => visit.url === '${origin}/rule-check' &&
+        visit.purpose === 'learning' && visit.topic === 'technology'))`),
+  'site rule applied to new visit');
+
+  const searchesBeforeExclude = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches.length;
+  await evaluate(dashboard, `(() => {
+    document.getElementById('exclude-site').value = 'google.com';
+    document.getElementById('exclude-form').requestSubmit();
+  })()`);
+  await eventually(() => evaluate(dashboard,
+    `chrome.storage.local.get('excludedSites').then(({excludedSites}) => excludedSites?.includes('google.com'))`),
+  'site exclusion saved');
+  const excludedTab = await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${googleOrigin}/search?q=excluded+test',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.tabs.get(${excludedTab.id}).then(tab => tab.status === 'complete')`),
+  'excluded page loaded');
+  await wait(300);
+  assert.equal((await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).searches.length, searchesBeforeExclude);
+
+  const deletedId = (await evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'})`)).videos[0].id;
+  await evaluate(dashboard, `(() => {
+    window.confirm = () => true;
+    const first = document.querySelector('#timeline li');
+    first.querySelectorAll('button')[1].click();
+  })()`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result =>
+      result.videos.every(video => video.id !== ${deletedId}))`),
+  'individual visit deleted');
+
+  const downloads = path.join(profile, 'downloads');
+  await mkdir(downloads);
+  await command('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+  await evaluate(dashboard, `document.getElementById('export').click()`);
+  const exportFile = path.join(downloads, `browselog-${new Date().toISOString().slice(0, 10)}.json`);
+  let exported;
+  await eventually(async () => {
+    try { exported = JSON.parse(await readFile(exportFile, 'utf8')); return true; }
+    catch { return false; }
+  }, 'local JSON export');
+  assert.equal(exported.version, 1);
+  assert.equal(exported.excludedSites.includes('google.com'), true);
+  assert.equal(exported.rules[0].site, '127.0.0.1');
+  assert.equal(exported.visits.every(visit => visit.id !== deletedId), true);
+
+  await evaluate(dashboard, `document.getElementById('clear').click()`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result => result.visits.length === 0)`),
+  'history cleared');
+  await evaluate(startedPopup,
+    `chrome.tabs.create({url:'${origin}/after-clear',active:true})`);
+  await eventually(() => evaluate(startedPopup,
+    `chrome.runtime.sendMessage({type:'history'}).then(result =>
+      result.visits.length === 1 && result.visits[0].url === '${origin}/after-clear')`),
+  'recording after history clear');
+
+  console.log('PASS Chrome: timing, searches, videos, dashboard, labels, rules, exclusions, deletion, and export.');
   await command('Browser.close');
 } finally {
   socket?.close();

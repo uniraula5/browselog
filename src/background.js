@@ -1,9 +1,10 @@
 import {
   makeVisit, saveVisit, recentVisits, recentSearches, recentVideos,
-  addActiveTime, addPlaybackTime, updateVisitTitle
+  addActiveTime, addPlaybackTime, updateVisitTitle, deleteVisit, clearVisits
 } from './storage.js';
 import { focusedVisit, changeFocus, samePage } from './tracker.js';
 import { classifyVisit } from './labels.js';
+import { isExcluded } from './settings.js';
 
 let pending = Promise.resolve();
 let saveError = '';
@@ -36,11 +37,16 @@ async function syncFocus(update, now, idleOverride) {
     if (update.visit) tabVisits[update.tabId] = update.visit;
     else delete tabVisits[update.tabId];
   }
-  const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS } = await chrome.storage.local.get(['paused', 'idleSeconds']);
+  const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS, excludedSites = [] } =
+    await chrome.storage.local.get(['paused', 'idleSeconds', 'excludedSites']);
   const threshold = IDLE_OPTIONS.includes(idleSeconds) ? idleSeconds : DEFAULT_IDLE_SECONDS;
   const idleState = idleOverride || await chrome.idle.queryState(threshold);
   const window = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
-  const next = changeFocus(focus, focusedVisit(window, tabVisits, paused, idleState), now, MAX_GAP_MS);
+  const selected = window?.tabs?.find(tab => tab.active);
+  const selectedSite = selected ? makeVisit(selected)?.site : null;
+  const excluded = selectedSite && isExcluded(selectedSite, excludedSites);
+  const visitId = excluded ? null : focusedVisit(window, tabVisits, paused, idleState);
+  const next = changeFocus(focus, visitId, now, MAX_GAP_MS);
   // Advance the session first so a failed history write cannot count time twice.
   await chrome.storage.session.set({ tabVisits, focus: next.current });
   if (next.finished) await addActiveTime(next.finished.visitId, next.finished.milliseconds);
@@ -65,7 +71,9 @@ function sessionVisit(id, visit) {
 }
 
 async function recordVisit(visit) {
-  const { rules = [] } = await chrome.storage.local.get('rules');
+  const { rules = [], excludedSites = [] } =
+    await chrome.storage.local.get(['rules', 'excludedSites']);
+  if (isExcluded(visit.site, excludedSites)) return null;
   return saveVisit({ ...visit, ...classifyVisit(visit, rules) });
 }
 
@@ -79,7 +87,8 @@ async function restoreOpenTabs(now) {
       if (tab.status !== 'complete' || tab.discarded) continue;
       const visit = makeVisit(tab, now);
       if (!visit || samePage(tabVisits[tab.id], visit)) continue;
-      tabVisits[tab.id] = sessionVisit(await recordVisit(visit), visit);
+      const id = await recordVisit(visit);
+      if (id) tabVisits[tab.id] = sessionVisit(id, visit);
     }
   }
   await chrome.storage.session.set({ tabVisits });
@@ -132,8 +141,11 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
     if (!paused && visit) {
       const { tabVisits = {} } = await chrome.storage.session.get('tabVisits');
       const earlier = tabVisits[tabId];
-      saved = samePage(earlier, visit) ? earlier :
-        sessionVisit(await recordVisit(visit), visit);
+      if (samePage(earlier, visit)) saved = earlier;
+      else {
+        const id = await recordVisit(visit);
+        if (id) saved = sessionVisit(id, visit);
+      }
       saveError = '';
     }
     await syncFocus({ tabId, visit: saved }, now);
@@ -160,7 +172,8 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(details => {
     if (samePage(earlier, visit)) return;
     // A same-page video switch may still have the previous video's title.
     if (visit.videoId) visit.title = `${visit.videoFormat} on YouTube`;
-    const saved = sessionVisit(await recordVisit(visit), visit);
+    const id = await recordVisit(visit);
+    const saved = id ? sessionVisit(id, visit) : null;
     await syncFocus({ tabId: details.tabId, visit: saved }, now);
     saveError = '';
   }).catch(reportError);
@@ -173,9 +186,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (!Number.isFinite(message.milliseconds) || message.milliseconds <= 0) return false;
       const reported = makeVisit({ url: message.url, id: sender.tab.id });
       if (!reported?.videoId) return false;
-      const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS } =
-        await chrome.storage.local.get(['paused', 'idleSeconds']);
-      if (paused) return false;
+      const { paused = false, idleSeconds = DEFAULT_IDLE_SECONDS, excludedSites = [] } =
+        await chrome.storage.local.get(['paused', 'idleSeconds', 'excludedSites']);
+      if (paused || isExcluded(reported.site, excludedSites)) return false;
       const window = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
       const tab = window?.tabs?.find(item => item.active && item.id === sender.tab.id);
       if (!window?.focused || window.state === 'minimized' || !tab || tab.discarded) return false;
@@ -192,8 +205,31 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     }).then(reply, () => reply(false));
     return true;
   }
+  const dashboard = sender.url === chrome.runtime.getURL('dashboard.html');
   if (![chrome.runtime.getURL('popup.html'), chrome.runtime.getURL('dashboard.html')]
     .includes(sender.url)) return;
+  if (dashboard && ['deleteVisit', 'clearHistory'].includes(message.type)) {
+    const now = Date.now();
+    enqueue(async () => {
+      await syncFocus(null, now);
+      if (message.type === 'deleteVisit') {
+        if (!Number.isInteger(message.id) || message.id < 1) throw new Error('Invalid visit ID');
+        await deleteVisit(message.id);
+        const { tabVisits = {}, focus = null } = await chrome.storage.session.get(['tabVisits', 'focus']);
+        for (const [tabId, visit] of Object.entries(tabVisits)) {
+          if (visit.id === message.id) delete tabVisits[tabId];
+        }
+        await chrome.storage.session.set({
+          tabVisits, focus: focus?.visitId === message.id ? null : focus
+        });
+      } else {
+        await clearVisits();
+        await chrome.storage.session.remove(['tabVisits', 'focus']);
+      }
+      return { ok: true };
+    }).then(reply, () => reply({ error: 'Could not delete history.' }));
+    return true;
+  }
   if (!['history', 'pause', 'idleSetting'].includes(message.type)) return;
   const now = Date.now();
   enqueue(async () => {

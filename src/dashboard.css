@@ -34,4 +34,10 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .visit-labels select { font-size: 12px; }
 .visit-labels button { font-size: 12px; padding: 8px 10px; }
 .visit-labels small { color: #526761; }
+.settings-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.settings-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #e3e8df; overflow-wrap: anywhere; }
+.settings-list button { flex: none; padding: 6px 10px; font-size: 12px; }
+.data-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.danger { background: #8c322c; }
+.danger:hover { background: #a34038; }
 @media (max-width: 600px) { header { padding: 18px; } main { padding: 12px; } section { padding: 16px; } .toolbar { justify-content: flex-start; } }

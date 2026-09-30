@@ -66,6 +66,48 @@
       <p id="timeline-count" class="help"></p>
       <ol id="timeline"></ol>
     </section>
+    <section aria-labelledby="rules-heading">
+      <h2 id="rules-heading">Personal site rules</h2>
+      <p class="help">Rules label future visits to a site and its subdomains. Correct older visits in the timeline.</p>
+      <form id="rule-form" class="filters">
+        <label for="rule-site">Site</label>
+        <input id="rule-site" required placeholder="example.com">
+        <label for="rule-purpose">Purpose</label>
+        <select id="rule-purpose">
+          <option value="learning">Learning</option>
+          <option value="information">Information</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="other">Other</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <label for="rule-topic">Topic</label>
+        <select id="rule-topic">
+          <option value="education">Education</option>
+          <option value="gaming">Gaming</option>
+          <option value="news">News</option>
+          <option value="technology">Technology</option>
+          <option value="other">Other</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <button type="submit">Save rule</button>
+      </form>
+      <ul id="rule-list" class="settings-list"></ul>
+    </section>
+    <section aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading">Privacy and data</h2>
+      <p class="help">Excluded sites stop future recording; they do not remove older visits.</p>
+      <form id="exclude-form" class="filters">
+        <label for="exclude-site">Exclude site</label>
+        <input id="exclude-site" required placeholder="example.com">
+        <button type="submit">Add exclusion</button>
+      </form>
+      <ul id="exclude-list" class="settings-list"></ul>
+      <div class="data-actions">
+        <button id="export" type="button">Export local JSON</button>
+        <button id="clear" class="danger" type="button">Delete all history</button>
+      </div>
+      <p class="help">The export contains titles, search terms, video IDs, labels, and settings.</p>
+    </section>
   </main>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import { allVisits, setVisitLabels } from './storage.js';
 import { PURPOSES, TOPICS } from './labels.js';
 import { engagedTime, summarize } from './summary.js';
+import { normalizeSite } from './settings.js';
 
 const range = document.getElementById('range');
 const formatFilter = document.getElementById('format-filter');
@@ -9,6 +10,8 @@ const textFilter = document.getElementById('text-filter');
 const status = document.getElementById('status');
 const timeline = document.getElementById('timeline');
 let visits = [];
+let rules = [];
+let excludedSites = [];
 
 function duration(milliseconds) {
   const minutes = Math.floor(milliseconds / 60000);
@@ -106,6 +109,7 @@ function visitRow(visit) {
   const purpose = labelSelect(PURPOSES, visit.purpose, 'Purpose');
   const topic = labelSelect(TOPICS, visit.topic, 'Topic');
   const save = document.createElement('button');
+  const remove = document.createElement('button');
   const source = document.createElement('small');
   title.className = 'visit-title';
   meta.className = 'visit-meta';
@@ -115,6 +119,8 @@ function visitRow(visit) {
   meta.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()} · ${visit.format || 'webpage'} · ${time}`;
   save.type = 'button';
   save.textContent = 'Save labels';
+  remove.type = 'button';
+  remove.textContent = 'Delete visit';
   source.textContent = visit.labelSource || 'earlier record';
   save.addEventListener('click', async () => {
     save.disabled = true;
@@ -130,7 +136,17 @@ function visitRow(visit) {
       save.disabled = false;
     }
   });
-  labels.append(purpose, topic, save, source);
+  remove.addEventListener('click', async () => {
+    if (!confirm('Delete this visit permanently?')) return;
+    remove.disabled = true;
+    const result = await chrome.runtime.sendMessage({ type: 'deleteVisit', id: visit.id });
+    if (result?.ok) await reload();
+    else {
+      status.textContent = result?.error || 'Could not delete visit.';
+      remove.disabled = false;
+    }
+  });
+  labels.append(purpose, topic, save, remove, source);
   item.append(title, meta, labels);
   return item;
 }
@@ -156,12 +172,113 @@ function render() {
   showTimeline(rows);
 }
 
+function settingRow(text, onRemove) {
+  const item = document.createElement('li');
+  const label = document.createElement('span');
+  const remove = document.createElement('button');
+  label.textContent = text;
+  remove.type = 'button';
+  remove.textContent = 'Remove';
+  remove.addEventListener('click', onRemove);
+  item.append(label, remove);
+  return item;
+}
+
+function showSettings() {
+  const ruleList = document.getElementById('rule-list');
+  const excludeList = document.getElementById('exclude-list');
+  ruleList.replaceChildren();
+  excludeList.replaceChildren();
+  for (const rule of rules) {
+    ruleList.append(settingRow(
+      `${rule.site} · ${rule.purpose} · ${rule.topic}`, async () => {
+        rules = rules.filter(item => item.site !== rule.site);
+        await chrome.storage.local.set({ rules });
+        showSettings();
+        status.textContent = 'Rule removed.';
+      }
+    ));
+  }
+  for (const site of excludedSites) {
+    excludeList.append(settingRow(site, async () => {
+      excludedSites = excludedSites.filter(item => item !== site);
+      await chrome.storage.local.set({ excludedSites });
+      showSettings();
+      status.textContent = 'Exclusion removed.';
+    }));
+  }
+  if (!rules.length) ruleList.textContent = 'No site rules yet.';
+  if (!excludedSites.length) excludeList.textContent = 'No excluded sites.';
+}
+
+document.getElementById('rule-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const site = normalizeSite(document.getElementById('rule-site').value);
+  if (!site) {
+    status.textContent = 'Enter a valid website hostname.';
+    return;
+  }
+  const purpose = document.getElementById('rule-purpose').value;
+  const topic = document.getElementById('rule-topic').value;
+  if (!PURPOSES.includes(purpose) || !TOPICS.includes(topic)) return;
+  rules = [{ site, purpose, topic }, ...rules.filter(item => item.site !== site)];
+  await chrome.storage.local.set({ rules });
+  document.getElementById('rule-site').value = '';
+  showSettings();
+  status.textContent = `Rule saved for ${site}.`;
+});
+
+document.getElementById('exclude-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const site = normalizeSite(document.getElementById('exclude-site').value);
+  if (!site) {
+    status.textContent = 'Enter a valid website hostname.';
+    return;
+  }
+  excludedSites = [...new Set([...excludedSites, site])].sort();
+  await chrome.storage.local.set({ excludedSites });
+  await chrome.runtime.sendMessage({ type: 'history' });
+  document.getElementById('exclude-site').value = '';
+  showSettings();
+  status.textContent = `Future visits to ${site} will be excluded.`;
+});
+
+document.getElementById('export').addEventListener('click', async () => {
+  await chrome.runtime.sendMessage({ type: 'history' });
+  const data = {
+    version: 1, exportedAt: new Date().toISOString(),
+    visits: await allVisits(), rules, excludedSites
+  };
+  const address = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json'
+  }));
+  const link = document.createElement('a');
+  link.href = address;
+  link.download = `browselog-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(address), 60_000);
+  status.textContent = 'Local JSON export started.';
+});
+
+document.getElementById('clear').addEventListener('click', async () => {
+  if (!confirm('Delete all saved visits and searches permanently?')) return;
+  const result = await chrome.runtime.sendMessage({ type: 'clearHistory' });
+  if (result?.ok) {
+    await reload();
+    status.textContent = 'History deleted. New visits start on the next page load.';
+  } else status.textContent = result?.error || 'Could not delete history.';
+});
+
 async function reload() {
   status.textContent = 'Updating local activity…';
   try {
     await chrome.runtime.sendMessage({ type: 'history' });
     visits = await allVisits();
+    const settings = await chrome.storage.local.get(['rules', 'excludedSites']);
+    rules = Array.isArray(settings.rules) ? settings.rules : [];
+    excludedSites = Array.isArray(settings.excludedSites) ? settings.excludedSites : [];
     render();
+    showSettings();
     status.textContent = `Loaded ${visits.length} local visits.`;
   } catch {
     status.textContent = 'Could not load activity. Try refreshing the page.';

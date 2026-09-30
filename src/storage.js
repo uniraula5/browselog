@@ -186,3 +186,29 @@ export async function allVisits() {
     });
   } finally { db.close(); }
 }
+
+export async function deleteVisit(id) {
+  const db = await openDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction('visits', 'readwrite');
+      transaction.objectStore('visits').delete(id);
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}
+
+export async function clearVisits() {
+  const db = await openDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction('visits', 'readwrite');
+      transaction.objectStore('visits').clear();
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { db.close(); }
+}

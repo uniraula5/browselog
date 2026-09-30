@@ -1,3 +1,5 @@
+import { siteMatches } from './settings.js';
+
 export const PURPOSES = ['learning', 'information', 'entertainment', 'other', 'unknown'];
 export const TOPICS = ['education', 'gaming', 'news', 'technology', 'other', 'unknown'];
 
@@ -10,7 +12,8 @@ export function contentFormat(visit) {
 
 export function classifyVisit(visit, rules = []) {
   const format = contentFormat(visit);
-  const rule = (Array.isArray(rules) ? rules : []).find(item => item?.site === visit.site &&
+  const rule = (Array.isArray(rules) ? rules : []).find(item => item?.site &&
+    siteMatches(visit.site, item.site) &&
     PURPOSES.includes(item.purpose) && TOPICS.includes(item.topic));
   if (rule) return {
     format, purpose: rule.purpose, topic: rule.topic, labelSource: 'rule'

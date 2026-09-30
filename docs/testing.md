@@ -131,3 +131,10 @@ checks that a video title update changes its automatic purpose label.
 The browser test opens the activity page, checks totals and timeline filters,
 then corrects a video's purpose and topic. Unit tests check that active browsing
 and playback overlap is counted once in totals, including older visit records.
+
+## Privacy controls
+
+The isolated Chrome test adds a site rule, checks its labels on a new visit,
+excludes a search site, deletes one visit, downloads a local JSON export, and
+clears all history. It then opens a new page to check that recording can restart.
+Unit tests cover exact-site and subdomain matching without matching lookalikes.
