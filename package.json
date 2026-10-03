@@ -1,10 +1,13 @@
 {
   "name": "browselog",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "extension:id": "node scripts/extension-id.mjs",
     "test": "node --test",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "test:sync": "node tests/sync-browser.mjs"
   }
 }

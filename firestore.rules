@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/visits/{visitId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['data', 'visitedAt', 'deviceId'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() <= 12000
+        && request.resource.data.visitedAt is int
+        && request.resource.data.deviceId is string;
+    }
+    match /users/{userId}/deletions/{visitId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['deletedAt'])
+        && request.resource.data.deletedAt is int;
+    }
+  }
+}
