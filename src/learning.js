@@ -11,7 +11,8 @@ export function words(text) {
 
 export function makeExample(visit, purpose, topic) {
   return {
-    id: visit.id, site: visit.site, format: visit.format || 'webpage',
+    id: visit.cloudId || visit.id, site: visit.site, format: visit.format || 'webpage',
+    accountUid: visit.accountUid,
     text: String(visit.searchQuery || visit.title || '').slice(0, 500), purpose, topic
   };
 }
@@ -51,6 +52,7 @@ export function learnedLabels(visit, format, examples = []) {
   const text = visit.searchQuery || visit.title || '';
   const related = examples.filter(example => {
     if (!example || example.format !== format) return false;
+    if (example.accountUid !== visit.accountUid) return false;
     const youtubeSite = site => site === 'youtube.com' || site?.endsWith('.youtube.com');
     const sameSite = example.site === visit.site ||
       (youtubeSite(example.site) && youtubeSite(visit.site));
