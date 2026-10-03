@@ -40,4 +40,5 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .data-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .danger { background: #8c322c; }
 .danger:hover { background: #a34038; }
+[hidden] { display: none !important; }
 @media (max-width: 600px) { header { padding: 18px; } main { padding: 12px; } section { padding: 16px; } .toolbar { justify-content: flex-start; } }

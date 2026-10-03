@@ -1,8 +1,9 @@
-import { allVisits, setVisitLabels } from './storage.js';
+import { allVisits, importArchiveVisits, setVisitLabels } from './storage.js';
 import { PURPOSES, TOPICS } from './labels.js';
 import { engagedTime, summarize } from './summary.js';
 import { normalizeSite } from './settings.js';
 import { makeExample, saveExample } from './learning.js';
+import { combineVisits } from './sync.js';
 
 const range = document.getElementById('range');
 const formatFilter = document.getElementById('format-filter');
@@ -10,10 +11,14 @@ const purposeFilter = document.getElementById('purpose-filter');
 const textFilter = document.getElementById('text-filter');
 const status = document.getElementById('status');
 const timeline = document.getElementById('timeline');
+const deviceFilter = document.getElementById('device-filter');
 let visits = [];
+let localVisits = [];
 let rules = [];
 let excludedSites = [];
 let learnedExamples = [];
+let allLearnedExamples = [];
+let account = { configured: false, signedIn: false };
 
 function duration(milliseconds) {
   const minutes = Math.floor(milliseconds / 60000);
@@ -31,7 +36,8 @@ function startOfRange() {
 
 function selectedVisits() {
   const start = startOfRange();
-  return visits.filter(visit => visit.visitedAt >= start);
+  return visits.filter(visit => visit.visitedAt >= start &&
+    (deviceFilter.value === 'all' || visit.deviceId === deviceFilter.value));
 }
 
 function stat(label, value) {
@@ -118,7 +124,9 @@ function visitRow(visit) {
   labels.className = 'visit-labels';
   title.textContent = visit.title;
   const time = duration(engagedTime(visit));
-  meta.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()} · ${visit.format || 'webpage'} · ${time}`;
+  const device = visit.deviceId ? ` · ${visit.deviceId === account.deviceId
+    ? 'This device' : `Device ${visit.deviceId.slice(0, 8)}`}` : '';
+  meta.textContent = `${visit.site} · ${new Date(visit.visitedAt).toLocaleString()} · ${visit.format || 'webpage'} · ${time}${device}`;
   save.type = 'button';
   save.textContent = 'Save labels';
   remove.type = 'button';
@@ -129,15 +137,30 @@ function visitRow(visit) {
   save.addEventListener('click', async () => {
     save.disabled = true;
     try {
-      const saved = await setVisitLabels(visit.id, purpose.value, topic.value);
-      if (!saved) throw new Error('Visit no longer exists');
+      const local = localVisits.some(item => item.id === visit.id &&
+        (!visit.cloudId || item.cloudId === visit.cloudId));
+      if (local) {
+        const saved = await setVisitLabels(visit.id, purpose.value, topic.value);
+        if (!saved) throw new Error('Visit no longer exists');
+      } else {
+        const result = await chrome.runtime.sendMessage({
+          type: 'correctCloudVisit', cloudId: visit.cloudId,
+          purpose: purpose.value, topic: topic.value
+        });
+        if (!result?.ok) throw new Error(result?.error || 'Could not save cloud labels.');
+      }
       if (purpose.value !== 'unknown' || topic.value !== 'unknown') {
         learnedExamples = saveExample(learnedExamples,
           makeExample(visit, purpose.value, topic.value));
       } else {
-        learnedExamples = learnedExamples.filter(example => example.id !== visit.id);
+        learnedExamples = learnedExamples.filter(example => example.id !==
+          (visit.cloudId || visit.id));
       }
-      await chrome.storage.local.set({ learnedExamples });
+      allLearnedExamples = [
+        ...allLearnedExamples.filter(example => example.accountUid !== account.uid),
+        ...learnedExamples
+      ];
+      await chrome.storage.local.set({ learnedExamples: allLearnedExamples });
       visit.purpose = purpose.value;
       visit.topic = topic.value;
       visit.labelSource = 'manual';
@@ -152,7 +175,9 @@ function visitRow(visit) {
   remove.addEventListener('click', async () => {
     if (!confirm('Delete this visit permanently?')) return;
     remove.disabled = true;
-    const result = await chrome.runtime.sendMessage({ type: 'deleteVisit', id: visit.id });
+    const result = await chrome.runtime.sendMessage(visit.cloudId && account.configured
+      ? { type: 'deleteSyncedVisit', cloudId: visit.cloudId }
+      : { type: 'deleteVisit', id: visit.id });
     if (result?.ok) await reload();
     else {
       status.textContent = result?.error || 'Could not delete visit.';
@@ -183,6 +208,35 @@ function render() {
   const rows = selectedVisits();
   showTotals(rows);
   showTimeline(rows);
+}
+
+function showDevices() {
+  const selected = deviceFilter.value;
+  deviceFilter.replaceChildren(new Option('All devices', 'all'));
+  for (const id of new Set(visits.map(visit => visit.deviceId).filter(Boolean))) {
+    const name = id === account.deviceId ? 'This device' : `Device ${id.slice(0, 8)}`;
+    deviceFilter.append(new Option(name, id));
+  }
+  deviceFilter.value = [...deviceFilter.options].some(option => option.value === selected)
+    ? selected : 'all';
+}
+
+function showAccount() {
+  const label = document.getElementById('account-status');
+  const signedIn = account.configured && account.signedIn;
+  document.getElementById('account-sign-in').hidden = !account.configured || signedIn;
+  document.getElementById('sync-now').hidden = !signedIn;
+  document.getElementById('sign-out').hidden = !signedIn;
+  document.getElementById('import-older').hidden = !signedIn ||
+    !localVisits.some(visit => !visit.accountUid);
+  document.getElementById('archive-file').hidden = !signedIn;
+  document.getElementById('clear').textContent = signedIn
+    ? 'Delete all synced history' : 'Delete all history';
+  if (!account.configured) label.textContent = 'Local build. See README to set up Google sign-in.';
+  else if (!signedIn) label.textContent = 'Sign in with Google to start recording.';
+  else label.textContent = `${account.email || 'Google account'} · ${account.lastSync
+    ? `last sync ${new Date(account.lastSync).toLocaleString()}` : 'waiting for first sync'}${
+    account.syncError ? ` · ${account.syncError}` : ''}`;
 }
 
 function settingRow(text, onRemove) {
@@ -232,7 +286,8 @@ function showLearningCount() {
 }
 
 document.getElementById('reset-learning').addEventListener('click', async () => {
-  await chrome.storage.local.remove('learnedExamples');
+  allLearnedExamples = allLearnedExamples.filter(example => example.accountUid !== account.uid);
+  await chrome.storage.local.set({ learnedExamples: allLearnedExamples });
   learnedExamples = [];
   showLearningCount();
   status.textContent = 'Learned patterns forgotten. Manual visit labels remain.';
@@ -273,8 +328,8 @@ document.getElementById('exclude-form').addEventListener('submit', async event =
 document.getElementById('export').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'history' });
   const data = {
-    version: 2, exportedAt: new Date().toISOString(),
-    visits: await allVisits(), rules, excludedSites, learnedExamples
+    version: 3, exportedAt: new Date().toISOString(),
+    visits, rules, excludedSites, learnedExamples
   };
   const address = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json'
@@ -288,7 +343,9 @@ document.getElementById('export').addEventListener('click', async () => {
 });
 
 document.getElementById('clear').addEventListener('click', async () => {
-  if (!confirm('Delete all saved visits and searches permanently?')) return;
+  if (!confirm(account.configured && account.signedIn
+    ? 'Delete all synced visits from every device permanently?'
+    : 'Delete all saved visits and searches permanently?')) return;
   const result = await chrome.runtime.sendMessage({ type: 'clearHistory' });
   if (result?.ok) {
     await reload();
@@ -297,18 +354,40 @@ document.getElementById('clear').addEventListener('click', async () => {
 });
 
 async function reload() {
-  status.textContent = 'Updating local activity…';
+  status.textContent = 'Updating activity…';
   try {
     await chrome.runtime.sendMessage({ type: 'history' });
-    visits = await allVisits();
+    localVisits = await allVisits();
+    account = await chrome.runtime.sendMessage({ type: 'account' });
+    if (account?.error) throw new Error(account.error);
+    const { localDeviceId } = await chrome.storage.local.get('localDeviceId');
+    account.deviceId = localDeviceId;
+    let cloudError = '';
+    if (account.configured && account.signedIn) {
+      try {
+        const cloud = await chrome.runtime.sendMessage({ type: 'cloudHistory' });
+        if (cloud?.error) throw new Error(cloud.error);
+        const { pendingDeletes = {} } = await chrome.storage.local.get('pendingDeletes');
+        visits = combineVisits(localVisits, cloud.visits, account.uid,
+          [...cloud.deletions, ...(pendingDeletes[account.uid] || [])]);
+      } catch (error) {
+        visits = localVisits.filter(visit => visit.accountUid === account.uid);
+        cloudError = error.message;
+      }
+    } else visits = account.configured ? [] : localVisits;
     const settings = await chrome.storage.local.get(['rules', 'excludedSites', 'learnedExamples']);
     rules = Array.isArray(settings.rules) ? settings.rules : [];
     excludedSites = Array.isArray(settings.excludedSites) ? settings.excludedSites : [];
-    learnedExamples = Array.isArray(settings.learnedExamples) ? settings.learnedExamples : [];
+    allLearnedExamples = Array.isArray(settings.learnedExamples) ? settings.learnedExamples : [];
+    learnedExamples = allLearnedExamples.filter(example => example.accountUid === account.uid);
+    showDevices();
     render();
     showSettings();
     showLearningCount();
-    status.textContent = `Loaded ${visits.length} local visits.`;
+    showAccount();
+    status.textContent = cloudError
+      ? `Showing ${visits.length} local visits. Cloud sync failed: ${cloudError}`
+      : `Loaded ${visits.length} visits${account.signedIn ? ' across devices' : ' locally'}.`;
   } catch {
     status.textContent = 'Could not load activity. Try refreshing the page.';
   }
@@ -319,4 +398,49 @@ formatFilter.addEventListener('change', render);
 purposeFilter.addEventListener('change', render);
 textFilter.addEventListener('input', render);
 document.getElementById('reload').addEventListener('click', reload);
+deviceFilter.addEventListener('change', render);
+document.getElementById('sync-now').addEventListener('click', reload);
+document.getElementById('account-sign-in').addEventListener('click', async () => {
+  status.textContent = 'Opening Google sign-in…';
+  const result = await chrome.runtime.sendMessage({ type: 'signIn' });
+  if (result?.ok) await reload();
+  else status.textContent = result?.error || 'Sign-in failed.';
+});
+document.getElementById('sign-out').addEventListener('click', async () => {
+  const result = await chrome.runtime.sendMessage({ type: 'signOut' });
+  if (result?.ok) await reload();
+  else status.textContent = result?.error || 'Could not sign out.';
+});
+document.getElementById('import-older').addEventListener('click', async () => {
+  if (!confirm('Upload older local browsing history to this Google account?')) return;
+  const result = await chrome.runtime.sendMessage({ type: 'importOlder' });
+  if (result?.ok) {
+    await reload();
+    status.textContent = `Uploaded ${result.count} older visits.`;
+  } else status.textContent = result?.error || 'Could not upload older visits.';
+});
+document.getElementById('archive-file').addEventListener('change', async event => {
+  const file = event.target.files?.[0];
+  if (!file || !account.signedIn) return;
+  try {
+    if (file.size > 20_000_000) throw new Error('Choose an export smaller than 20 MB.');
+    const raw = await file.text();
+    const archive = JSON.parse(raw);
+    if (!Array.isArray(archive.visits) || archive.visits.length > 10000) {
+      throw new Error('Choose a BrowseLog JSON export with at most 10,000 visits.');
+    }
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256',
+      new TextEncoder().encode(raw)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const { importedArchives = {} } = await chrome.storage.local.get('importedArchives');
+    const earlier = importedArchives[account.uid] || [];
+    if (earlier.includes(digest)) throw new Error('This archive was already imported.');
+    if (!confirm(`Import ${archive.visits.length} visits into ${account.email}?`)) return;
+    const count = await importArchiveVisits(archive.visits, account.uid, account.deviceId);
+    importedArchives[account.uid] = [...earlier, digest];
+    await chrome.storage.local.set({ importedArchives });
+    await reload();
+    status.textContent = `Imported ${count} visits. Cloud sync will upload them.`;
+  } catch (error) { status.textContent = error.message; }
+  finally { event.target.value = ''; }
+});
 reload();

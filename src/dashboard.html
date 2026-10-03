@@ -16,6 +16,19 @@
     </div>
   </header>
   <main>
+    <section aria-labelledby="account-heading">
+      <h2 id="account-heading">Account and sync</h2>
+      <p id="account-status" class="help">Checking account…</p>
+      <div class="data-actions">
+        <button id="account-sign-in" type="button" hidden>Sign in with Google</button>
+        <button id="sync-now" type="button" hidden>Sync now</button>
+        <button id="import-older" type="button" hidden>Upload older local history</button>
+        <button id="sign-out" type="button" hidden>Sign out</button>
+      </div>
+      <p class="help">Older local history uploads only if you choose it. New visits sync after sign-in.</p>
+      <label for="archive-file" class="help">Move history from the older BrowseLog extension</label>
+      <input id="archive-file" type="file" accept=".json,application/json" hidden>
+    </section>
     <div class="toolbar">
       <label for="range">Period</label>
       <select id="range">
@@ -62,13 +75,15 @@
         </select>
         <label for="text-filter">Find</label>
         <input id="text-filter" type="search" placeholder="Title, site, or query">
+        <label for="device-filter">Device</label>
+        <select id="device-filter"><option value="all">All devices</option></select>
       </div>
       <p id="timeline-count" class="help"></p>
       <ol id="timeline"></ol>
     </section>
     <section aria-labelledby="learning-heading">
       <h2 id="learning-heading">Learn from my corrections</h2>
-      <p class="help">Save labels on visits above to teach BrowseLog. Similar videos or searches need two matching corrections; ordinary sites need three. New visits show when a label was learned. Everything stays on this device.</p>
+      <p class="help">Save labels on visits above to teach BrowseLog. Similar videos or searches need two matching corrections; ordinary sites need three. Learning examples stay on this device.</p>
       <p id="learning-count" class="help">No corrections saved for learning yet.</p>
       <button id="reset-learning" type="button">Forget learned patterns</button>
     </section>
@@ -109,10 +124,10 @@
       </form>
       <ul id="exclude-list" class="settings-list"></ul>
       <div class="data-actions">
-        <button id="export" type="button">Export local JSON</button>
+        <button id="export" type="button">Export visible JSON</button>
         <button id="clear" class="danger" type="button">Delete all history</button>
       </div>
-      <p class="help">The export contains titles, search terms, video IDs, labels, learning examples, and settings.</p>
+      <p class="help">The export contains titles, search terms, video IDs, labels, local learning examples, and settings.</p>
     </section>
   </main>
 </body>

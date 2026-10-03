@@ -12,6 +12,7 @@ Keep commits local unless publishing is requested. Update the README as features
 | 5. Dashboard | added daily and weekly activity summaries; added timeline filters and browsing breakdowns |
 | 6. Release | added exclusions history controls and export; documented setup limitations and first release |
 | 7. Local learning | used manual corrections as local examples; labeled similar videos and repeated site patterns; added reset and export controls |
+| 8. Account sync | added Google sign-in, per-account cloud storage, offline upload, a combined device dashboard, and cross-device deletion |
 
 ## Current milestone
 
@@ -19,8 +20,9 @@ Search queries, individual YouTube videos and Shorts, playback intervals, and
 basic content labels are recorded. The activity dashboard has corrections and
 summaries that subtract overlapping active and playback time. Site rules,
 exclusions, deletion, and export were implemented in version 0.1. Version 0.2
-learns cautious patterns from manually corrected visits. Future work can add
-more search engines and broader same-page tracking.
+learns cautious patterns from manually corrected visits. Version 0.3 adds
+account-backed sync and a combined dashboard. Future work can add more search
+engines and broader same-page tracking.
 
 ## Decisions for later phases
 
@@ -32,5 +34,5 @@ more search engines and broader same-page tracking.
 - Test timing transitions, restart gaps, classification, and search parsing.
 - Review useful Rep utilities and Shorts detection before adapting them.
 
-Remote AI classification, blocking, other social platforms, and sync remain
-stretch goals.
+Remote AI classification, blocking, other social platforms, and a mobile viewer
+remain stretch goals.

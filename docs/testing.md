@@ -7,6 +7,7 @@ node --check src/popup.js
 node --check src/background.js
 npm test
 npm run test:browser
+npm run test:sync
 ```
 
 ## Popup checks in Chrome
@@ -66,6 +67,16 @@ npm run test:browser
   new visits return to keyword or rule labels.
 - Delete a corrected visit and check that its example is gone. Deleting all
   history should clear every example.
+- Build `dist/` with a Firebase project, then sign in on Chrome and Arc using
+  the same Google account. Open different pages in each browser and confirm the
+  combined dashboard shows both devices once.
+- Turn off the network on one browser, visit a page, then reconnect. Sync should
+  upload it without duplicating an earlier visit.
+- Correct a visit from the other browser, then add active time on its original
+  browser. The manual label should remain after sync.
+- Delete a synced visit from one browser while the other is offline. Reconnect
+  the other browser; the visit should stay deleted.
+- Sign in with a different account. The first account's visits must not appear.
 
 The first idle threshold interval still counts, so this remains an estimate.
 Other same-page app navigation is not recorded yet. The final interval may be partly

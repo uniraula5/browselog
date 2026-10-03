@@ -1,114 +1,102 @@
 # BrowseLog
 
-BrowseLog is a Chrome extension I built to see where my browsing time goes. It
-records visits to normal websites, supported searches, and individual YouTube
-videos and Shorts. Everything stays in the browser's local storage.
+BrowseLog is a browser extension for seeing where my browsing time goes. It
+records normal pages, Google/Bing/YouTube searches, and individual YouTube videos
+and Shorts. Version 0.3 adds Google sign-in and a dashboard shared across desktop
+browsers using the same account.
 
-## What version 0.2 does
+## What it does
 
-- Records page visits across tabs, including background tabs. Only the selected
-  tab in the focused Chrome window earns active time.
-- Stops active time when Chrome loses focus or the computer is idle or locked.
-  The idle threshold is adjustable from 30 seconds to 5 minutes.
-- Records Google, Bing, and YouTube search terms. It follows YouTube searches,
-  videos, and Shorts when the URL changes without a page reload.
-- Estimates YouTube playback time while a video plays in the visible, focused
-  tab. Playback can continue during computer idle, but stops on screen lock.
-- Suggests format, topic, and purpose labels from simple keywords. Unknown
-  content stays unknown. You can correct labels on individual visits; those
-  corrections teach future labels on this device. Site rules take priority.
-- Shows today, last seven days, and all-time summaries, breakdowns, and a
-  filterable activity timeline. Engaged time counts overlapping active and
-  playback time once.
-- Lets you pause recording, exclude sites, delete visits or all history, and
-  export visits and settings as JSON.
+- Counts active time only for the selected tab in the focused window. It stops
+  when the computer is idle or locked. Video playback is measured separately.
+- Guesses a purpose and topic from titles, then learns from labels I correct.
+  Site rules override guesses. The labels cannot tell if I really learned.
+- Keeps visits locally while offline and retries cloud sync every two minutes.
+  Each device has its own ID, so visits are not duplicated in the dashboard.
+- Shows totals, categories, visits, searches, and a device filter. Corrections
+  and deletions to synced visits are shared across devices.
+- Can pause recording, exclude sites, export JSON, and delete synced history.
 
-The labels are guesses. They cannot tell whether a video was useful or whether
-I was actually paying attention.
+## Set up the cloud project
 
-## Teach BrowseLog
+BrowseLog needs your own Firebase project. These are public client identifiers,
+not a service-account password.
 
-Open the activity dashboard and use **Save labels** on visits you know. Two
-similar videos or searches can teach a future item with matching title words.
-Three consistently labeled ordinary pages can teach future pages on that site.
-Videos and Shorts stay separate, so a gaming video does not turn all of YouTube
-into gaming. The dashboard shows whether each label came from keywords, a site
-rule, your correction, or a learned pattern.
+1. In the [Firebase console](https://console.firebase.google.com/), create a
+   project. Enable **Authentication → Google** and create a **Cloud Firestore**
+   database in production mode.
+2. Run `npm run extension:id`. In [Google Cloud Credentials](https://console.cloud.google.com/apis/credentials),
+   create an OAuth client of type **Chrome Extension** using that ID. The ID is
+   fixed by `scripts/public-key.txt` so Chrome and Arc load the same extension.
+   Create a second OAuth client of type **Web application** with authorized
+   redirect URI `https://EXTENSION_ID.chromiumapp.org/`. Arc uses this Google
+   sign-in flow when Chrome's built-in token flow is unavailable.
+3. Copy `config.example.json` to `config.local.json`. Fill in the Firebase
+   project ID, its Web API key, and both OAuth client IDs.
+4. Deploy [firestore.rules](firestore.rules) to your Firebase project:
 
-Learning uses up to 300 recent corrections. Conflicting examples leave a label
-unknown or with its keyword suggestion. Corrections affect future visits; they
-do not silently rewrite old records. **Forget learned patterns** removes the
-training examples but keeps labels you saved on individual visits. Deleting a
-visit removes its example, and deleting all history clears all examples.
+   ```bash
+   npx firebase-tools login
+   npx firebase-tools deploy --only firestore:rules --project YOUR_PROJECT_ID
+   ```
 
-## Install
+5. Build and install:
 
-1. Download or clone this repository.
-2. Open `chrome://extensions` in Chrome 120 or newer.
-3. Turn on **Developer mode**, then click **Load unpacked**.
-4. Select the repository's `src` folder and pin BrowseLog.
-5. Open the toolbar popup to see recent activity, then choose **Open activity
-   dashboard** for summaries and controls.
+   ```bash
+   npm run build
+   ```
 
-There is no build step, account, API key, or cloud service. After changing the
-code, use **Reload** on the extension card.
+   Open `chrome://extensions` (or `arc://extensions`), turn on Developer mode,
+   choose **Load unpacked**, and select `dist/`. Repeat on each desktop browser.
+   Click **Sign in with Google** in the popup. Gmail inbox access is not requested.
 
-## How the timing works
+The build inserts the OAuth client ID into the manifest and your Firebase IDs
+into `dist/config.js`. `config.local.json` and `dist/` stay out of Git. Loading
+`src/` is only the old local-only development mode; use `dist/` for sync.
 
-The background worker tracks the active tab and saves a checkpoint about every
-30 seconds. It restores open tabs after a browser restart without counting the
-time Chrome was closed. Long delayed checkpoints are capped at one minute.
-A small script on YouTube pages reports short playing intervals; the worker
-accepts them only for the selected, visible tab. Active and playback time are
-stored separately, along with their overlap.
+## Move older BrowseLog history
 
-Time is an estimate. The first idle-threshold interval counts as active, and
-the last few seconds before Chrome closes may be lost. A video playing while
-you are away can still count as playback if Chrome remains focused and the
-computer is not locked.
+The fixed extension ID is different from the older unpacked build's ID. Before
+removing the old extension, open its dashboard and click **Export local JSON**.
+In the new signed-in dashboard, choose that file under **Move history from the
+older BrowseLog extension**. The file imports once, then syncs. Older visits
+already present in the same extension can be uploaded with **Upload older local
+history** instead. Neither happens automatically.
 
-## Privacy
+## Privacy and limits
 
-BrowseLog does not send activity anywhere. It excludes incognito and browser
-pages. Saved URLs lose credentials, query parameters, and fragments, but paths
-and titles may still be personal. Supported search terms (up to 500 characters)
-and YouTube video IDs are stored separately. Learning examples also contain
-the corrected visit's site and title or search term. An export contains these
-details.
-Excluding a site stops future recording for that site and its subdomains; delete
-older visits separately if needed.
+After sign-in, visits are stored in both local IndexedDB and your Firebase
+project. Titles, saved URL paths, supported search terms, video IDs, timing,
+and labels reach Firestore. Credentials, URL queries, and fragments are stripped
+from saved URLs; search terms are stored separately. Incognito and browser pages
+are excluded. Firestore rules allow each signed-in user to read and change only
+their own records. Deletion markers remain in Firestore so an offline device
+cannot bring a deleted visit back. Local learning examples stay on each device.
 
-The extension uses `tabs` for URLs and titles, `storage` for settings and the
-current timer, `idle` for computer inactivity, `alarms` for checkpoints, and
-`webNavigation` for same-page URL changes. Its YouTube content script reads
-video playing state; it does not read the video itself.
+Sign-out stops new recording on that browser; it does not delete history. The
+dashboard's delete control removes synced visits across devices. Firebase has
+[usage quotas](https://firebase.google.com/docs/firestore/pricing), so the
+extension batches changed visits instead of uploading every timer update.
+Chrome extensions run on desktop browsers, not mobile Chrome. A phone can only
+view this data if a separate web dashboard is added later.
 
 ## Run checks
 
 ```bash
 npm test
 npm run test:browser
+npm run test:sync
 ```
 
-Unit tests need Node.js 20 or newer. The browser test needs Node.js 22 or newer,
-Chrome, and OpenSSL. It uses a temporary Chrome profile and local HTTPS pages.
-On macOS it looks for Chrome in `/Applications`; set `BROWSELOG_CHROME` to another
-Chrome executable if needed.
+The browser tests need Chrome for Testing and OpenSSL. Set `BROWSELOG_CHROME`
+to the browser executable if Chrome is not in `/Applications`. `test:sync`
+uses two temporary browser profiles and a local fake cloud; it cannot verify
+real Google sign-in or deployed Firestore rules. Those need the Firebase project
+above and a manual sign-in in Chrome and Arc.
 
-`src/` contains the extension, `tests/` contains unit and browser checks, and
-`docs/roadmap.md` records the build phases. Built with HTML, CSS, JavaScript,
-Chrome extension APIs, and IndexedDB.
-
-## Limits and next ideas
-
-Existing Chrome history is not imported. Search-term extraction covers Google,
-Bing, and YouTube; other search engines appear as ordinary visits. Other sites'
-same-page navigation is not tracked yet. Learned labels rely on similar words
-or repeated site corrections, so new topics and mixed-purpose sites still need
-review. No remote model analyzes page content or watches videos.
-
-See [testing notes](docs/testing.md) for checks that still need a real desktop,
-such as screen lock and sleep.
+The extension is plain JavaScript, HTML, CSS, IndexedDB, and Chrome APIs. The
+cloud calls use Firebase's REST APIs, so no package is bundled into the
+extension. See [testing notes](docs/testing.md) and [build phases](docs/roadmap.md).
 
 ## License
 

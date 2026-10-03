@@ -41,7 +41,38 @@ const visits = document.getElementById('visits');
 const searches = document.getElementById('searches');
 const videos = document.getElementById('videos');
 const idleSeconds = document.getElementById('idle-seconds');
+const accountStatus = document.getElementById('account-status');
+const signIn = document.getElementById('sign-in');
 let paused = false;
+
+async function loadAccount() {
+  const account = await chrome.runtime.sendMessage({ type: 'account' });
+  if (account?.error) throw new Error(account.error);
+  if (!account?.configured) {
+    accountStatus.textContent = 'Local build. Set up cloud sync to sign in.';
+    signIn.hidden = true;
+  } else if (account.signedIn) {
+    accountStatus.textContent = `${account.email || 'Google account'} · sync ${account.syncError ? 'needs retry' : 'ready'}`;
+    signIn.hidden = true;
+  } else {
+    accountStatus.textContent = 'Sign in to start recording and sync across devices.';
+    signIn.hidden = false;
+  }
+  return account;
+}
+
+signIn.addEventListener('click', async () => {
+  signIn.disabled = true;
+  accountStatus.textContent = 'Opening Google sign-in…';
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'signIn' });
+    if (!result?.ok) throw new Error(result?.error || 'Sign-in failed.');
+    await loadAccount();
+    await loadHistory();
+  } catch (error) {
+    accountStatus.textContent = error.message;
+  } finally { signIn.disabled = false; }
+});
 
 function timeLabel(milliseconds) {
   const seconds = Math.floor((milliseconds || 0) / 1000);
@@ -54,10 +85,12 @@ async function loadHistory(message = { type: 'history' }) {
   try {
     const result = await chrome.runtime.sendMessage(message);
     if (!result || result.error) throw new Error(result?.error || 'History is unavailable.');
+    const account = await loadAccount();
     paused = result.paused;
     idleSeconds.value = String(result.idleSeconds);
     pause.textContent = paused ? 'Resume recording' : 'Pause recording';
-    recordingStatus.textContent = result.saveError || (paused ? 'Recording paused.' :
+    recordingStatus.textContent = account.configured && !account.signedIn
+      ? 'Sign in to start recording.' : result.saveError || (paused ? 'Recording paused.' :
       result.idleState === 'active' ? 'Recording active browsing.' : 'Idle or locked. Time paused.');
     visits.replaceChildren();
     for (const visit of result.visits) {
@@ -103,8 +136,8 @@ async function loadHistory(message = { type: 'history' }) {
       videos.append(item);
     }
     if (!result.videos.length) videos.textContent = 'No videos or Shorts yet.';
-    pause.disabled = false;
-    idleSeconds.disabled = false;
+    pause.disabled = account.signedIn === false && account.configured;
+    idleSeconds.disabled = account.signedIn === false && account.configured;
   } catch (error) {
     recordingStatus.textContent = `${error.message} Use Refresh page details to retry.`;
   }

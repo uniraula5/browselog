@@ -43,6 +43,8 @@ p { line-height: 1.5; }
   border-radius: 14px;
   background: #fff;
 }
+.page-card + .page-card { margin-top: 12px; }
+#account-status { margin: 0 0 10px; font-size: 12px; color: #526761; }
 
 #page-site {
   margin: 0 0 6px;
@@ -86,3 +88,4 @@ footer { margin-top: 22px; font-size: 11px; color: #526761; }
 #dashboard { margin-top: 22px; }
 select { width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #d8ded5; border-radius: 8px; background: #fff; color: #183b35; }
 select:focus-visible { outline: 3px solid #689c32; outline-offset: 2px; }
+[hidden] { display: none !important; }
