@@ -143,9 +143,9 @@ try {
   const message = details => evaluate(popup, `chrome.runtime.sendMessage(${JSON.stringify(details)})`);
   const history = () => message({ type: 'history' });
 
-  assert.equal(await evaluate(popup, `chrome.runtime.getManifest().version`), '0.2.0');
+  assert.equal(await evaluate(popup, `chrome.runtime.getManifest().version`), '0.3.0');
   assert.equal(await evaluate(popup,
-    `document.querySelector('footer').textContent.includes('v0.2.0')`), true);
+    `document.querySelector('footer').textContent.includes('v0.3.0')`), true);
   assert.equal((await history()).idleSeconds, 60);
   assert.equal((await history()).visits.length, 0);
   const page = await evaluate(popup,
@@ -703,7 +703,7 @@ try {
     try { exported = JSON.parse(await readFile(exportFile, 'utf8')); return true; }
     catch { return false; }
   }, 'local JSON export');
-  assert.equal(exported.version, 2);
+  assert.equal(exported.version, 3);
   assert.equal(exported.excludedSites.includes('google.com'), true);
   assert.equal(exported.rules[0].site, '127.0.0.1');
   assert.equal(exported.visits.every(visit => visit.id !== deletedId), true);
@@ -739,7 +739,7 @@ try {
   'new correction stored');
   await evaluate(dashboard, `document.getElementById('reset-learning').click()`);
   await eventually(() => evaluate(dashboard,
-    `chrome.storage.local.get('learnedExamples').then(result => !result.learnedExamples)`),
+    `chrome.storage.local.get('learnedExamples').then(result => result.learnedExamples?.length === 0)`),
   'learning reset');
   assert.equal((await evaluate(startedPopup,
     `chrome.runtime.sendMessage({type:'history'})`)).visits[0].labelSource, 'manual');
