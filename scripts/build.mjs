@@ -10,7 +10,7 @@ try {
 } catch {
   throw new Error(`Create ${configName} from config.example.json before building.`);
 }
-for (const name of ['projectId', 'apiKey', 'oauthClientId', 'webOAuthClientId']) {
+for (const name of ['projectId', 'apiKey', 'webOAuthClientId']) {
   if (!config[name] || String(config[name]).startsWith('YOUR_')) {
     throw new Error(`${configName} needs a real ${name}.`);
   }
@@ -23,10 +23,6 @@ await mkdir(target);
 await cp(path.join(root, 'src'), target, { recursive: true });
 const manifest = JSON.parse(await readFile(path.join(target, 'manifest.json'), 'utf8'));
 manifest.key = publicKey;
-manifest.oauth2 = {
-  client_id: config.oauthClientId,
-  scopes: ['openid', 'email', 'profile']
-};
 if (testMode) {
   for (const url of [config.authUrl, config.tokenUrl, config.firestoreUrl]) {
     if (url) manifest.host_permissions.push(`${new URL(url).origin}/*`);

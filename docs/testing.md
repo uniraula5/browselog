@@ -82,6 +82,15 @@ The first idle threshold interval still counts, so this remains an estimate.
 Other same-page app navigation is not recorded yet. The final interval may be partly
 lost on shutdown if the last checkpoint has not run.
 
+## Account sync check
+
+With a Firebase project on the Spark plan, the built extension signed in with
+Google in Chrome for Testing and Arc. Each browser showed visits from both
+devices. A label correction saved in Chrome appeared in Arc after sync. The
+older Arc extension's local visits were exported before it was disabled;
+that archive was not imported into the cloud account. Live deletion and offline
+reconnection remain to be checked manually.
+
 ## Milestone 2 results
 
 The four automated filtering tests pass. An isolated Chrome for Testing profile

@@ -26,13 +26,11 @@ not a service-account password.
    project. Enable **Authentication → Google** and create a **Cloud Firestore**
    database in production mode.
 2. Run `npm run extension:id`. In [Google Cloud Credentials](https://console.cloud.google.com/apis/credentials),
-   create an OAuth client of type **Chrome Extension** using that ID. The ID is
-   fixed by `scripts/public-key.txt` so Chrome and Arc load the same extension.
-   Create a second OAuth client of type **Web application** with authorized
-   redirect URI `https://EXTENSION_ID.chromiumapp.org/`. Arc uses this Google
-   sign-in flow when Chrome's built-in token flow is unavailable.
+   create an OAuth client of type **Web application** with authorized redirect
+   URI `https://EXTENSION_ID.chromiumapp.org/`. The ID is fixed by
+   `scripts/public-key.txt` so Chrome and Arc load the same extension.
 3. Copy `config.example.json` to `config.local.json`. Fill in the Firebase
-   project ID, its Web API key, and both OAuth client IDs.
+   project ID, its Web API key, and the Web OAuth client ID.
 4. Deploy [firestore.rules](firestore.rules) to your Firebase project:
 
    ```bash
@@ -50,8 +48,8 @@ not a service-account password.
    choose **Load unpacked**, and select `dist/`. Repeat on each desktop browser.
    Click **Sign in with Google** in the popup. Gmail inbox access is not requested.
 
-The build inserts the OAuth client ID into the manifest and your Firebase IDs
-into `dist/config.js`. `config.local.json` and `dist/` stay out of Git. Loading
+The build inserts your Firebase and OAuth client IDs into `dist/config.js`.
+`config.local.json` and `dist/` stay out of Git. Loading
 `src/` is only the old local-only development mode; use `dist/` for sync.
 
 ## Move older BrowseLog history

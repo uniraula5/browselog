@@ -21,14 +21,17 @@ test('Google token becomes a Firebase account and refreshes before cloud use', a
         webOAuthClientId: 'web.apps.googleusercontent.com'
       };`);
     globalThis.chrome = {
-      runtime: { getManifest: () => ({ oauth2: { client_id: 'example.apps.googleusercontent.com' } }) },
       identity: {
-        getAuthToken: async details => {
+        getRedirectURL: () => 'https://extension-id.chromiumapp.org/',
+        launchWebAuthFlow: async details => {
           assert.equal(details.interactive, true);
-          assert.deepEqual(details.scopes, ['openid', 'email', 'profile']);
-          return { token: 'google-token' };
-        },
-        clearAllCachedAuthTokens: async () => {}
+          const request = new URL(details.url);
+          assert.equal(request.searchParams.get('client_id'), 'web.apps.googleusercontent.com');
+          assert.equal(request.searchParams.get('redirect_uri'),
+            'https://extension-id.chromiumapp.org/');
+          return `https://extension-id.chromiumapp.org/#access_token=google-token&token_type=Bearer&state=${
+            request.searchParams.get('state')}`;
+        }
       },
       storage: { local: {
         get: async key => typeof key === 'string' ? { [key]: saved[key] } : saved,
@@ -69,8 +72,6 @@ test('Google token becomes a Firebase account and refreshes before cloud use', a
       accountUid: 'user-one', cloudId: 'device-1', deviceId: 'device', visitedAt: 1
     });
     assert.equal(calls.at(-1).options.headers.Authorization, 'Bearer renewed-token');
-    chrome.identity.getAuthToken = async () => { throw new Error('not supported in Arc'); };
-    chrome.identity.getRedirectURL = () => 'https://extension-id.chromiumapp.org/';
     chrome.identity.launchWebAuthFlow = async details => {
       const request = new URL(details.url);
       assert.equal(request.searchParams.get('client_id'), 'web.apps.googleusercontent.com');

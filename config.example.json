@@ -1,6 +1,5 @@
 {
   "projectId": "YOUR_FIREBASE_PROJECT_ID",
   "apiKey": "YOUR_FIREBASE_WEB_API_KEY",
-  "oauthClientId": "YOUR_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
   "webOAuthClientId": "YOUR_WEB_OAUTH_CLIENT_ID.apps.googleusercontent.com"
 }

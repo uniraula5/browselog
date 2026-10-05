@@ -6,7 +6,7 @@ const firestoreUrl = firebaseConfig.firestoreUrl || 'https://firestore.googleapi
 
 export function configured() {
   return Boolean(firebaseConfig.projectId && firebaseConfig.apiKey &&
-    chrome.runtime.getManifest().oauth2?.client_id && firebaseConfig.webOAuthClientId);
+    firebaseConfig.webOAuthClientId);
 }
 
 async function jsonRequest(url, options = {}) {
@@ -23,13 +23,6 @@ async function authRequest(path, body) {
 }
 
 export async function googleAccessToken() {
-  try {
-    const result = await chrome.identity.getAuthToken({
-      interactive: true, scopes: ['openid', 'email', 'profile']
-    });
-    const token = typeof result === 'string' ? result : result?.token;
-    if (token) return token;
-  } catch { /* Arc and some other browsers do not support Chrome's token flow. */ }
   const redirect = chrome.identity.getRedirectURL();
   const state = crypto.randomUUID();
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -78,7 +71,6 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   await chrome.storage.local.remove('authSession');
-  await chrome.identity.clearAllCachedAuthTokens?.();
 }
 
 export async function currentSession() {
